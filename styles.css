@@ -185,15 +185,15 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   background: rgba(0, 0, 0, .72); padding: 2px var(--space-1);
 }
 .tre-dig__co { flex: 1; color: #fff; font-size: var(--fs-xs, 0.75rem); font-family: var(--font-mono, monospace); }
-.tre-dig__btn {
-  background: var(--accent-soft); color: var(--accent);
-  border: 1px solid var(--accent); border-radius: var(--radius-sm, 6px);
-  font-family: inherit; font-size: var(--fs-xs, 0.75rem); line-height: 1;
-  padding: 3px 5px; cursor: pointer; min-width: 26px;
+.tre-dig__tick {
+  position: absolute; top: var(--space-1); right: var(--space-1); z-index: 3;
+  width: 24px; height: 24px; border-radius: var(--radius-pill, 999px);
+  background: var(--accent); color: var(--color-bg, #080c13);
+  display: none; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: var(--fw-bold, 700); box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
 }
-.tre-dig__btn:hover { background: var(--accent); color: var(--color-bg, #080c13); }
-.tre-dig.is-added { box-shadow: 0 0 0 1px var(--accent); border-color: var(--accent); }
-.tre-dig.is-added .tre-dig__btn--add { background: var(--accent); color: var(--color-bg, #080c13); }
+.tre-dig.is-added { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+.tre-dig.is-added .tre-dig__tick { display: flex; }
 
 /* ── 我的路線面板 ── */
 .tre-route-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
@@ -213,6 +213,22 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 .tre-route-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 .tre-route-item__btn { background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5); border-radius: var(--radius-sm, 6px); cursor: pointer; font-family: inherit; font-size: var(--fs-small, 0.8125rem); padding: 2px 8px; }
 .tre-route-item__btn:hover { border-color: var(--accent); color: var(--accent); }
+/* change 2：共享路線每點的小裁切地圖（與 .tre-dig 同技法，縮小版）*/
+.tre-route-item__thumb {
+  position: relative; flex: 0 0 auto;
+  width: 76px; height: 60px; overflow: hidden;
+  border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg, #080c13);
+}
+.tre-route-item__thumbmap {
+  position: absolute; width: 2048px; height: 2048px;
+  background-repeat: no-repeat; background-size: 2048px 2048px; pointer-events: none;
+}
+.tre-route-item__thumbpin {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 12px; height: 12px; border: 2px solid var(--accent); border-radius: var(--radius-pill, 999px);
+  box-shadow: 0 0 0 2px var(--color-bg, #080c13); pointer-events: none;
+}
 
 /* ── 多人房間 bar ── */
 .tre-roombar { padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
