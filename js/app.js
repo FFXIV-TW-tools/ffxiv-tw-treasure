@@ -13,7 +13,7 @@
 
   var el = {};
   ['step-grade', 'step-map', 'step-treasure', 'grade-grid', 'map-grid', 'dig-grid',
-   'full-map', 'full-map-info', 'map-title', 'tre-title', 'tre-status',
+   'full-map', 'full-map-info', 'map-title', 'tre-title', 'tre-status', 'map-tabs',
    'room-bar', 'route-panel', 'route-count', 'route-stat', 'route-empty', 'route-list'].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -84,9 +84,30 @@
     });
   }
   function selectMap(mid) {
-    state.mapId = mid; renderTreasures();
+    state.mapId = mid; renderTreasures(); renderMapTabs();
     el['tre-title'].textContent = zoneName(mid) + ' · ' + state.grade.grade + ' 挖掘點';
     showStep('treasure'); announce('顯示 ' + zoneName(mid) + ' 的挖掘點');
+  }
+
+  // 同等級地圖快速切換 tab（step 3 常駐）：玩家常一次準備多張同 grade 的圖、連續挖 → 直接切，不用退回選單
+  function renderMapTabs() {
+    var host = el['map-tabs']; if (!host) return;
+    host.textContent = '';
+    var g = state.grade; if (!g) { host.hidden = true; return; }
+    var pts = DATA.byItem[g.itemId] || [], counts = {};
+    pts.forEach(function (p) { counts[p.map] = (counts[p.map] || 0) + 1; });
+    var mids = Object.keys(counts).map(Number).sort(function (a, b) { return zoneName(a).localeCompare(zoneName(b), 'zh-Hant'); });
+    if (mids.length <= 1) { host.hidden = true; return; }   // 只有 1 張圖不必顯示
+    host.hidden = false;
+    var lbl = document.createElement('span'); lbl.className = 'tre-maptabs__lbl codex-small'; lbl.textContent = g.grade + ' 地圖：'; host.appendChild(lbl);
+    mids.forEach(function (mid) {
+      var chip = document.createElement('button'); chip.type = 'button';
+      chip.className = 'tre-maptab' + (mid === state.mapId ? ' is-active' : '');
+      chip.textContent = zoneName(mid) + '（' + counts[mid] + '）';
+      if (mid === state.mapId) chip.setAttribute('aria-current', 'true');
+      chip.addEventListener('click', function () { if (mid !== state.mapId) selectMap(mid); });
+      host.appendChild(chip);
+    });
   }
 
   // ── Step 3：挖掘點（➕ = 加入房間共享路線）──
