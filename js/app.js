@@ -175,9 +175,9 @@
       return;
     }
     var key = myKey(p);
-    if (shared.points.some(function (q) { return q.key === key; })) ROOM.removePoint(key);
-    else ROOM.addPoint({ key: key, owner: ROOM.owner(), ownerName: ROOM.ownerName(), map: p.map, x: p.x, y: p.y, item: p.item });
-    // 不樂觀更新：等 DO 廣播回來（onChange → refreshDigAdded / renderRoom）
+    if (shared.points.some(function (q) { return q.key === key; })) { ROOM.removePoint(key); toast('已從共享路線移除（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
+    else { ROOM.addPoint({ key: key, owner: ROOM.owner(), ownerName: ROOM.ownerName(), map: p.map, x: p.x, y: p.y, item: p.item }); toast('➕ 已加入共享路線（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
+    // 即時 toast 給操作回饋（不等廣播）；卡片 ✓ 狀態仍由 DO 廣播回 refreshDigAdded 更新
   }
 
   // ── 房間 bar ──
