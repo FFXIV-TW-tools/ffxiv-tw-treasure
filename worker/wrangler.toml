@@ -1,0 +1,16 @@
+name = "ffxiv-tw-treasure-room"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# 藏寶圖多人共享路線：Durable Object（WebSocket 即時 + SQLite 持久化）。
+# 一房 = 一個 Room DO（idFromName(房號)）。op-based 協定：client 送操作(add/remove/done/order)，
+# DO 單執行緒序列套用到權威清單再廣播 → 同時加點不互蓋（解決 mit 整份覆蓋的並發掉點問題）。
+# presence=連線數(0 寫)、廣播(0 寫)、狀態存 DO storage(免費版 10萬 row writes/day)。
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# SQLite-backed DO（免費版僅支援 SQLite class）→ 首次部署自動建立
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

@@ -1,0 +1,245 @@
+/* ffxiv-tw-treasure 工具樣式 — 用 portal codex token / 元件，不重定義 token/button/字級。
+   accent 統一 cyan（_DESIGN-SYSTEM §Accent）。幾何（卡尺寸/2048 圖）為資料驅動結構值，非設計 token。 */
+
+:root {
+  --accent: var(--color-accent-cyan, #4ec9d0);
+  --accent-soft: var(--color-accent-cyan-soft, rgba(78, 201, 208, 0.18));
+  /* 裁切卡尺寸 — 必須與 js/app.js 的 DIG_W/DIG_H 同值（crop 偏移計算用）*/
+  --dig-w: 208px;
+  --dig-h: 180px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans, "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif);
+  background:
+    var(--pattern-overlay),
+    var(--pattern-scanline),
+    var(--gradient-body, linear-gradient(135deg, #050a10, #0f151e, #1f2c3e));
+  color: var(--color-text, #f5f5f5);
+  min-height: 100vh;
+}
+
+main.codex-container { padding: 0 var(--space-4) var(--space-8); }
+
+/* ── 引導 intro ── */
+.tre-intro { padding: var(--space-4); margin-bottom: var(--space-4); }
+.tre-intro p { margin: 0 0 var(--space-2); }
+.tre-intro p:last-child { margin-bottom: 0; }
+.tre-intro__feat { color: var(--accent); }
+.tre-intro__feat b { color: var(--accent); }
+
+/* ── 步驟列 ── */
+.tre-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+.tre-step {
+  background: transparent;
+  border: 1px solid var(--color-border, #2b3f56);
+  color: var(--color-text, #f5f5f5);
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit;
+  font-size: var(--fs-small, 0.8125rem);
+  cursor: pointer;
+  transition: border-color var(--transition-fast, .15s), color var(--transition-fast, .15s);
+}
+.tre-step:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+.tre-step:disabled { opacity: .45; cursor: default; }
+.tre-step--static { cursor: default; }
+.tre-step[aria-current="step"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tre-steps__sep { color: var(--color-text-muted, #c0c9da); }
+
+/* ── 面板 ── */
+.tre-panel { padding: var(--space-5); margin-bottom: var(--space-4); }
+.tre-panel__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3);
+}
+.tre-panel__head .codex-h2 { margin: 0; }
+.tre-hint { color: var(--color-text-muted, #c0c9da); font-weight: 600; margin: 0 0 var(--space-4); }
+
+/* ── 通用 grid ── */
+.tre-grid { display: grid; gap: var(--space-3); }
+.tre-grid--grade { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.tre-grid--map { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+/* ── 等級卡 ── */
+.tre-card {
+  display: flex; flex-direction: column; gap: var(--space-1);
+  text-align: left;
+  background: var(--color-surface, #101824);
+  border: 1px solid var(--color-border, #2b3f56);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer; font-family: inherit; color: inherit;
+  transition: border-color var(--transition-fast, .15s), transform var(--transition-fast, .15s);
+}
+.tre-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tre-card__name { font-size: var(--fs-h3, 1.25rem); color: var(--accent); font-weight: var(--fw-semibold, 600); line-height: var(--lh-snug, 1.3); }
+.tre-card__meta { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+
+/* ── 地圖卡（縮圖）── */
+.tre-mapcard {
+  display: flex; flex-direction: column;
+  background: var(--color-surface, #101824);
+  border: 1px solid var(--color-border, #2b3f56);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden; cursor: pointer; font-family: inherit; color: inherit;
+  transition: border-color var(--transition-fast, .15s), transform var(--transition-fast, .15s);
+}
+.tre-mapcard:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tre-mapcard__thumb {
+  width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block;
+  background: var(--color-bg, #080c13); border-bottom: 1px solid var(--color-border, #2b3f56);
+}
+.tre-mapcard__body { padding: var(--space-2) var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.tre-mapcard__zone { font-weight: var(--fw-semibold, 600); }
+
+/* ── 挖掘點：grid（固定卡寬，crop 偏移才對得準）+ 側欄全圖 ── */
+.tre-treasure-layout {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 360px);
+  gap: var(--space-4);
+  align-items: start;
+}
+.tre-grid--dig {
+  grid-template-columns: repeat(auto-fill, var(--dig-w));
+  justify-content: center;
+}
+
+/* 裁切卡：208×180 視窗顯示 2048px 全圖的一塊，pin 釘中心 = 挖掘點 */
+.tre-dig {
+  position: relative;
+  width: var(--dig-w); height: var(--dig-h);
+  overflow: hidden; padding: 0;
+  border: 1px solid var(--color-border, #2b3f56);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer; background: var(--color-bg, #080c13);
+  transition: border-color var(--transition-fast, .15s);
+}
+.tre-dig:hover, .tre-dig.is-active, .tre-dig.is-hl { border-color: var(--accent); }
+.tre-dig.is-hl { box-shadow: 0 0 0 2px var(--accent), 0 0 12px var(--accent-soft); }
+.tre-dig__map {
+  position: absolute; width: 2048px; height: 2048px;
+  background-repeat: no-repeat; background-size: 2048px 2048px;
+  pointer-events: none;
+}
+.tre-dig__pin {
+  position: absolute; left: 50%; top: 50%;
+  width: 18px; height: 18px; transform: translate(-50%, -50%);
+  border: 2px solid var(--accent); border-radius: var(--radius-pill, 999px);
+  box-shadow: 0 0 0 2px var(--color-bg, #080c13), 0 0 8px var(--accent);
+  pointer-events: none;
+}
+.tre-dig__num {
+  position: absolute; top: var(--space-1); left: var(--space-1);
+  min-width: 20px; text-align: center;
+  background: var(--accent); color: var(--color-bg, #080c13);
+  font-size: var(--fs-xs, 0.75rem); font-weight: var(--fw-bold, 700);
+  border-radius: var(--radius-sm, 6px); padding: 0 var(--space-1); line-height: 1.5;
+}
+.tre-dig__coords {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, .72); color: #fff;
+  font-size: var(--fs-xs, 0.75rem); text-align: center; padding: var(--space-1) 0;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── 側欄全圖 ── */
+.tre-sidemap { position: sticky; top: calc(64px + var(--space-3)); }
+.tre-fullmap {
+  position: relative; width: 100%; aspect-ratio: 1 / 1;
+  border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-md, 8px);
+  background: var(--color-bg, #080c13) center / contain no-repeat;
+  overflow: hidden;
+}
+.tre-fullmap__marker {
+  position: absolute; transform: translate(-50%, -50%);
+  min-width: 18px; height: 18px; padding: 0 2px;
+  background: var(--accent); color: var(--color-bg, #080c13);
+  font-size: var(--fs-xs, 0.75rem); font-weight: var(--fw-bold, 700);
+  border-radius: var(--radius-pill, 999px); border: 1px solid var(--color-bg, #080c13);
+  cursor: pointer; line-height: 16px; text-align: center;
+}
+.tre-fullmap__marker.is-active { background: var(--color-accent-gold, #e6c068); transform: translate(-50%, -50%) scale(1.25); z-index: 1; }
+.tre-fullmap__info { margin: var(--space-2) 0 0; min-height: 1.4em; }
+
+/* ── footer ── */
+.tre-footer { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-border, #2b3f56); }
+.tre-footer a { color: var(--accent); }
+
+/* 載入/錯誤狀態 */
+.tre-loading { color: var(--color-text-muted, #c0c9da); }
+.tre-error { color: var(--color-danger, #e57373); font-weight: 600; }
+
+/* ── 挖掘卡動作列（複製 / 加入路線）── */
+.tre-dig__bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: var(--space-1);
+  background: rgba(0, 0, 0, .72); padding: 2px var(--space-1);
+}
+.tre-dig__co { flex: 1; color: #fff; font-size: var(--fs-xs, 0.75rem); font-family: var(--font-mono, monospace); }
+.tre-dig__btn {
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: var(--radius-sm, 6px);
+  font-family: inherit; font-size: var(--fs-xs, 0.75rem); line-height: 1;
+  padding: 3px 5px; cursor: pointer; min-width: 26px;
+}
+.tre-dig__btn:hover { background: var(--accent); color: var(--color-bg, #080c13); }
+.tre-dig.is-added { box-shadow: 0 0 0 1px var(--accent); border-color: var(--accent); }
+.tre-dig.is-added .tre-dig__btn--add { background: var(--accent); color: var(--color-bg, #080c13); }
+
+/* ── 我的路線面板 ── */
+.tre-route-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+#route-stat { color: var(--accent); font-weight: 600; margin: 0 0 var(--space-3); }
+.tre-route-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.tre-route-zone { border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-md, 8px); overflow: hidden; }
+.tre-route-zone__head {
+  background: var(--color-surface-hover, #18222f); padding: var(--space-2) var(--space-3);
+  font-weight: var(--fw-semibold, 600); color: var(--accent);
+  display: flex; justify-content: space-between; gap: var(--space-2);
+}
+.tre-route-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border, #2b3f56); }
+.tre-route-item.is-done { opacity: .55; }
+.tre-route-item.is-done .tre-route-item__co { text-decoration: line-through; }
+.tre-route-item__num { min-width: 24px; text-align: center; background: var(--accent); color: var(--color-bg, #080c13); border-radius: var(--radius-sm, 6px); font-weight: var(--fw-bold, 700); font-size: var(--fs-xs, 0.75rem); }
+.tre-route-item__co { flex: 1; font-family: var(--font-mono, monospace); }
+.tre-route-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.tre-route-item__btn { background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5); border-radius: var(--radius-sm, 6px); cursor: pointer; font-family: inherit; font-size: var(--fs-small, 0.8125rem); padding: 2px 8px; }
+.tre-route-item__btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── 多人房間 bar ── */
+.tre-roombar { padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }
+.tre-roombar__row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.tre-roombar__label { font-weight: var(--fw-semibold, 600); }
+.tre-roombar__code {
+  font-family: var(--font-mono, monospace); font-size: var(--fs-h3, 1.25rem); letter-spacing: .15em;
+  color: var(--accent); background: var(--accent-soft); padding: 2px 10px; border-radius: var(--radius-sm, 6px);
+}
+.tre-roombar__online { color: var(--accent); font-weight: var(--fw-semibold, 600); }
+.tre-roombar__hint { color: var(--color-text-muted, #c0c9da); }
+.tre-room-input {
+  width: 8em; text-transform: uppercase; letter-spacing: .12em;
+  font-family: var(--font-mono, monospace);
+}
+.tre-room-chip {
+  background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5);
+  border-radius: var(--radius-sm, 6px); padding: 2px 8px; font-family: var(--font-mono, monospace);
+  cursor: pointer; font-size: var(--fs-small, .8125rem);
+}
+.tre-room-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* 共享路線項目的擁有者標籤 */
+.tre-route-item__owner { color: var(--color-text-muted, #c0c9da); font-size: var(--fs-xs, .75rem); }
+
+/* ── 響應式：窄螢幕側欄堆到下方 ── */
+@media (max-width: 720px) {
+  .tre-treasure-layout { grid-template-columns: 1fr; }
+  .tre-sidemap { position: static; order: -1; }   /* 手機把全圖放上面 */
+  .tre-grid--dig { justify-content: center; }     /* 手機單欄置中，不靠左留大空白 */
+}

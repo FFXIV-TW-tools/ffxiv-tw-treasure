@@ -1,0 +1,14 @@
+{
+  "name": "ffxiv-tw-treasure-room",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "cf:deploy": "wrangler deploy",
+    "cf:deploy:dry": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "test": "node tests/worker.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.93.0"
+  }
+}

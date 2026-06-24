@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="tool-name" content="繁中服藏寶圖">
+<meta name="description" content="FFXIV 繁中服藏寶圖挖寶點查詢 — 選等級→選地圖→比對謎題圖找座標，G6~G17 + 綠圖全收錄。">
+<title>FFXIV 繁中服藏寶圖 — 挖寶點查詢</title>
+
+<link rel="preconnect" href="https://ffxiv-tw-tools-portal.pages.dev" crossorigin>
+<!-- Portal 共享資源（document.write 唯一標準寫法，保證 defer 執行順序）-->
+<script>(function(){
+  var dev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  var base = dev ? 'http://localhost:8774/ffxiv-tw-tools-portal/' : 'https://ffxiv-tw-tools-portal.pages.dev/';
+  document.write(
+    '<link rel="stylesheet" href="' + base + 'tokens.css">' +
+    '<link rel="stylesheet" href="' + base + 'header.css">' +
+    '<script defer src="' + base + 'header.js"><\/script>' +
+    '<script defer src="' + base + 'settings-client.js"><\/script>'
+  );
+})();</script>
+
+<link rel="stylesheet" href="styles.css">
+<script defer src="js/treasure-core.js"></script>
+<script defer src="js/room.js"></script>
+<script defer src="js/app.js"></script>
+</head>
+<body>
+  <header class="page-header">
+    <h1 class="codex-h1">🗺️ 繁中服藏寶圖 <span class="sub codex-label codex-label--muted">FFXIV 繁中服</span></h1>
+  </header>
+
+  <main class="codex-container">
+    <!-- 引導 intro -->
+    <section class="codex-tablet codex-tablet--cyan tre-intro">
+      <span class="codex-hud" aria-hidden="true"></span>
+      <p class="codex-body">🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。</p>
+      <p class="codex-body tre-intro__feat">✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。</p>
+    </section>
+
+    <!-- 多人房間（建立 / 加入 / 房號 / 在線人數 / 邀請）— app.js 依狀態 render -->
+    <section id="room-bar" class="codex-tablet codex-tablet--cyan tre-roombar">
+      <span class="codex-hud" aria-hidden="true"></span>
+    </section>
+
+    <!-- 步驟列 -->
+    <nav class="tre-steps" aria-label="步驟">
+      <button type="button" class="tre-step" data-goto="grade">① 選等級</button>
+      <span class="tre-steps__sep" aria-hidden="true">›</span>
+      <button type="button" class="tre-step" data-goto="map" disabled>② 選地圖</button>
+      <span class="tre-steps__sep" aria-hidden="true">›</span>
+      <span class="tre-step tre-step--static" data-step="treasure">③ 挖掘點</span>
+    </nav>
+
+    <div id="tre-status" class="codex-sr-only" role="status" aria-live="polite"></div>
+
+    <!-- Step 1：選等級 -->
+    <section id="step-grade" class="codex-tablet codex-tablet--cyan tre-panel">
+      <span class="codex-hud" aria-hidden="true"></span>
+      <h2 class="codex-h2">選擇藏寶圖等級</h2>
+      <p class="codex-body tre-hint">選你手上藏寶圖的等級（依生物皮命名，後綴 Gxx）。</p>
+      <div id="grade-grid" class="tre-grid tre-grid--grade">
+        <p class="codex-body">… 展開卷軸 …</p>
+      </div>
+    </section>
+
+    <!-- Step 2：選地圖 -->
+    <section id="step-map" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
+      <span class="codex-hud" aria-hidden="true"></span>
+      <div class="tre-panel__head">
+        <h2 class="codex-h2" id="map-title">選擇地圖</h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="grade">← 換等級</button>
+      </div>
+      <div id="map-grid" class="tre-grid tre-grid--map"></div>
+    </section>
+
+    <!-- Step 3：挖掘點 -->
+    <section id="step-treasure" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
+      <span class="codex-hud" aria-hidden="true"></span>
+      <div class="tre-panel__head">
+        <h2 class="codex-h2" id="tre-title">挖掘點</h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="map">← 換地圖</button>
+      </div>
+      <p class="codex-body tre-hint">把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片或側欄標記複製座標。</p>
+      <div class="tre-treasure-layout">
+        <div id="dig-grid" class="tre-grid tre-grid--dig"></div>
+        <aside class="tre-sidemap">
+          <div id="full-map" class="tre-fullmap" aria-label="全區地圖（含所有挖掘點標記）"></div>
+          <p id="full-map-info" class="codex-small tre-fullmap__info"></p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 我的路線（記錄 + 分組 + 建議順序）— 跨步驟常駐 -->
+    <section id="route-panel" class="codex-tablet codex-tablet--cyan tre-panel">
+      <span class="codex-hud" aria-hidden="true"></span>
+      <div class="tre-panel__head">
+        <h2 class="codex-h2">🧭 共享路線 <span id="route-count" class="codex-small"></span></h2>
+        <div class="tre-route-actions">
+          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize">建議順序</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy">📋 複製整條</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done">清除已完成</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear">🗑 清空</button>
+        </div>
+      </div>
+      <p id="route-stat" class="codex-small" hidden></p>
+      <p id="route-empty" class="tre-hint">房間裡還沒有點。到挖掘點卡片按「➕」把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
+      <div id="route-list" class="tre-route-list"></div>
+    </section>
+
+    <footer class="tre-footer">
+      <p class="codex-small">
+        挖掘點資料來源：<a href="https://ffxivteamcraft.com" target="_blank" rel="noopener">Teamcraft</a>；地名 / 物品名：繁中服 item_dict。
+        座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。
+      </p>
+    </footer>
+  </main>
+</body>
+</html>
