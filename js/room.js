@@ -58,6 +58,7 @@
         if (m.online != null) online = m.online;
         emit(m.t);
       } else if (m.t === 'online') { online = m.online || 0; emit('online'); }
+      else if (m.t === 'expired') { manualClose = true; lsDel(ROOM_KEY); code = null; points = []; online = 0; emit('expired'); }
       // m.t === 'error'(storage_failed)：下次 op 自然重試；m.t === 'pong'：noop
     };
     ws.onclose = function () { ws = null; online = 0; emit('disconnected'); if (!manualClose && code) scheduleReconnect(); };

@@ -71,7 +71,7 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 
 /* ── 等級卡 ── */
 .tre-card {
-  display: flex; flex-direction: column; gap: var(--space-1);
+  display: flex; flex-direction: column; gap: var(--space-2);
   text-align: left;
   background: var(--color-surface, #101824);
   border: 1px solid var(--color-border, #2b3f56);
@@ -81,7 +81,15 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   transition: border-color var(--transition-fast, .15s), transform var(--transition-fast, .15s);
 }
 .tre-card:hover { border-color: var(--accent); transform: translateY(-1px); }
-.tre-card__name { font-size: var(--fs-h3, 1.25rem); color: var(--accent); font-weight: var(--fw-semibold, 600); line-height: var(--lh-snug, 1.3); }
+/* #6/#7：等級卡 — 等級號醒目 + 怪等金標 + 名稱次級，層次更清楚 */
+.tre-card__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.tre-card__grade { font-family: var(--font-mono, monospace); font-size: var(--fs-h3, 1.25rem); font-weight: var(--fw-bold, 700); color: var(--accent); letter-spacing: .02em; }
+.tre-card__lvl {
+  font-size: var(--fs-xs, .75rem); font-weight: var(--fw-bold, 700); white-space: nowrap;
+  color: var(--color-accent-gold, #e6c068); background: rgba(230, 192, 104, .12);
+  border: 1px solid rgba(230, 192, 104, .4); border-radius: var(--radius-pill, 999px); padding: 1px 8px;
+}
+.tre-card__name { font-size: var(--fs-body, 1rem); color: var(--color-text, #f5f5f5); font-weight: var(--fw-semibold, 600); line-height: var(--lh-snug, 1.3); }
 .tre-card__meta { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 
 /* ── 地圖卡（縮圖）── */
@@ -208,26 +216,25 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 .tre-route-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border, #2b3f56); }
 .tre-route-item.is-done { opacity: .55; }
 .tre-route-item.is-done .tre-route-item__co { text-decoration: line-through; }
+/* #2：高亮「自己加的」點（兩人同圖時一眼分出哪些是我的）；順序仍依建議排序 */
+.tre-route-item.is-mine { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .tre-route-item__num { min-width: 24px; text-align: center; background: var(--accent); color: var(--color-bg, #080c13); border-radius: var(--radius-sm, 6px); font-weight: var(--fw-bold, 700); font-size: var(--fs-xs, 0.75rem); }
 .tre-route-item__co { flex: 1; font-family: var(--font-mono, monospace); }
 .tre-route-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 .tre-route-item__btn { background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5); border-radius: var(--radius-sm, 6px); cursor: pointer; font-family: inherit; font-size: var(--fs-small, 0.8125rem); padding: 2px 8px; }
 .tre-route-item__btn:hover { border-color: var(--accent); color: var(--accent); }
-/* change 2：共享路線每點的小裁切地圖（與 .tre-dig 同技法，縮小版）*/
+/* #1：共享路線每點縮圖＝整張小地圖（contain）+ pin 標位置（比裁切塊好認） */
 .tre-route-item__thumb {
   position: relative; flex: 0 0 auto;
-  width: 76px; height: 60px; overflow: hidden;
+  width: 84px; height: 84px; overflow: hidden;
   border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
-  background: var(--color-bg, #080c13);
-}
-.tre-route-item__thumbmap {
-  position: absolute; width: 2048px; height: 2048px;
-  background-repeat: no-repeat; background-size: 2048px 2048px; pointer-events: none;
+  background-color: var(--color-bg, #080c13);
+  background-repeat: no-repeat; background-position: center; background-size: contain;
 }
 .tre-route-item__thumbpin {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: absolute; transform: translate(-50%, -50%);
   width: 12px; height: 12px; border: 2px solid var(--accent); border-radius: var(--radius-pill, 999px);
-  box-shadow: 0 0 0 2px var(--color-bg, #080c13); pointer-events: none;
+  box-shadow: 0 0 0 2px var(--color-bg, #080c13), 0 0 6px var(--accent); pointer-events: none;
 }
 
 /* ── 多人房間 bar ── */
@@ -240,6 +247,11 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 }
 .tre-roombar__online { color: var(--accent); font-weight: var(--fw-semibold, 600); }
 .tre-roombar__hint { color: var(--color-text-muted, #c0c9da); }
+/* #3：建立 / 加入 明確分組 */
+.tre-roombar__group { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.tre-roombar__grouplbl { color: var(--color-text-muted, #c0c9da); font-weight: var(--fw-semibold, 600); }
+.tre-roombar__grouphint { color: var(--color-text-muted, #c0c9da); }
+.tre-roombar__or { color: var(--color-text-muted, #c0c9da); padding: 0 var(--space-2); opacity: .7; }
 .tre-room-input {
   width: 8em; text-transform: uppercase; letter-spacing: .12em;
   font-family: var(--font-mono, monospace);

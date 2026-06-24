@@ -9,6 +9,7 @@ const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford（去 I L O U 避�
 const MAX_MSG_BYTES = 8 * 1024;       // 單一 op 訊息上限（op 很小，8KB 綽綽）
 const MAX_SEED_BYTES = 64 * 1024;     // 建房 seed 上限
 const MAX_POINTS = 64;                 // 一房挖掘點上限（8 人 × 數張圖，64 足夠）
+const EXPIRE_MS = 6 * 60 * 60 * 1000;  // 房間建立 6 小時後過期（DO alarm 清資料 + 拒新連線）
 const OP_RATE_MAX = 25;                // 同 socket op 速率：每窗 25 次
 const OP_RATE_WINDOW_MS = 3000;        // 窗口 3s（容許「連點加 8 個」的合法爆發，擋惡意洪水）
 const ROOM_RATE_MAX = 10;              // 同 IP 建房上限：每窗 10 次
@@ -181,22 +182,30 @@ export class Room {
   async fetch(req) {
     if (req.headers.get("Upgrade") === "websocket") {
       if (!originAllowed(req)) return new Response("forbidden_origin", { status: 403 });
+      const st = await this.ctx.storage.get("state");
       const pair = new WebSocketPair();
       this.ctx.acceptWebSocket(pair[1]);
-      const points = await this.getPoints();
-      try { pair[1].send(JSON.stringify({ t: "init", points, online: this.online() })); } catch (e) {}
+      if (st && st.expiresAt && Date.now() > st.expiresAt) {   // 過期房：清資料 + 通知 + 關
+        await this.ctx.storage.deleteAll();
+        try { pair[1].send(JSON.stringify({ t: "expired" })); pair[1].close(1000, "expired"); } catch (e) {}
+        return new Response(null, { status: 101, webSocket: pair[0] });
+      }
+      const points = (st && Array.isArray(st.points)) ? st.points : [];
+      try { pair[1].send(JSON.stringify({ t: "init", points, online: this.online(), expiresAt: (st && st.expiresAt) || 0 })); } catch (e) {}
       this.broadcastOnline();
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     if (req.method === "POST") {   // 建房 seed
       const body = await req.json().catch(() => ({}));
+      let seedPoints = [];
       if (body && body.state) {
         if (!validateState(body.state)) return new Response(JSON.stringify({ error: "bad_state" }), { status: 400, headers: { "Content-Type": "application/json" } });
-        await this.ctx.storage.put("state", { points: body.state.points });
-      } else {
-        await this.ctx.storage.put("state", { points: [] });
+        seedPoints = body.state.points;
       }
-      return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
+      const expiresAt = Date.now() + EXPIRE_MS;
+      await this.ctx.storage.put("state", { points: seedPoints, expiresAt });
+      await this.ctx.storage.setAlarm(expiresAt);   // 6h 到期 → alarm() 自動清
+      return new Response(JSON.stringify({ ok: true, expiresAt }), { headers: { "Content-Type": "application/json" } });
     }
     if (req.method === "GET") {
       return new Response(JSON.stringify({ points: await this.getPoints(), online: this.online() }), { headers: { "Content-Type": "application/json" } });
@@ -217,11 +226,16 @@ export class Room {
     else if (e.n >= OP_RATE_MAX) return;   // 超速 → 丟
     else e.n++;
 
-    const points = await this.getPoints();
+    const st = await this.ctx.storage.get("state");
+    if (st && st.expiresAt && now > st.expiresAt) {   // 過期房：拒 op + 通知關閉
+      try { ws.send(JSON.stringify({ t: "expired" })); ws.close(1000, "expired"); } catch (e2) {}
+      return;
+    }
+    const points = (st && Array.isArray(st.points)) ? st.points : [];
     const next = applyOp(points, msg);     // 套用到權威清單（DO 單執行緒序列 → 並發 op 不互蓋）
     if (next === null) return;             // 無效 / no-op：不寫不廣播
     try {
-      await this.ctx.storage.put("state", { points: next });
+      await this.ctx.storage.put("state", { points: next, expiresAt: (st && st.expiresAt) || (Date.now() + EXPIRE_MS) });   // 保留過期時刻
     } catch (storageErr) {
       try { ws.send(JSON.stringify({ t: "error", reason: "storage_failed" })); } catch (e2) {}
       return;
@@ -230,6 +244,11 @@ export class Room {
   }
   async webSocketClose(ws) { try { ws.close(); } catch (e) {} this.broadcastOnline(ws); }
   async webSocketError(ws) { this.broadcastOnline(ws); }
+  // 6h 到期：清房間資料 + 通知全員關閉（DO alarm 觸發）
+  async alarm() {
+    await this.ctx.storage.deleteAll();
+    for (const ws of this.ctx.getWebSockets()) { try { ws.send(JSON.stringify({ t: "expired" })); ws.close(1000, "expired"); } catch (e) {} }
+  }
 }
 
 // 純函式 export 供單元測試（wrangler 只認 default.fetch + Room class）

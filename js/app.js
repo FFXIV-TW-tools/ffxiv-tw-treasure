@@ -6,7 +6,6 @@
   var TC = window.TreasureCore;
   var ROOM = window.TreasureRoom;       // room.js（可能未載入 → 房間功能停用，查詢仍可用）
   var DIG_W = 208, DIG_H = 180;          // ⚠ 必須與 styles.css --dig-w/--dig-h 同值
-  var THUMB_W = 76, THUMB_H = 60;        // 共享路線每點小裁切圖（須與 .tre-route-item__thumb 同值）
 
   var DATA = { grades: [], maps: {}, byItem: {} };
   var state = { grade: null, mapId: null };
@@ -38,17 +37,25 @@
     setBreadcrumb(name);
   }
 
+  // 怪物等級＝該版本上限（7.x=100 / 6.x=90 / 5.x=80 / 4.x=70 / 3.x=60；綠圖 4.05→70）。挖圖時可能出現的怪等。
+  function monsterLevel(exp) { var maj = parseInt(exp, 10); return (maj >= 2 && maj <= 9) ? 30 + maj * 10 : null; }
+
   // ── Step 1：等級 ──
   function renderGrades() {
     el['grade-grid'].textContent = '';
     DATA.grades.forEach(function (g) {
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-card';
-      var name = document.createElement('span'); name.className = 'tre-card__name'; name.textContent = g.name + '（' + g.grade + '）';
+      var top = document.createElement('div'); top.className = 'tre-card__top';
+      var gradeEl = document.createElement('span'); gradeEl.className = 'tre-card__grade'; gradeEl.textContent = g.grade;
+      top.appendChild(gradeEl);
+      var lv = monsterLevel(g.expansion);
+      if (lv) { var lvEl = document.createElement('span'); lvEl.className = 'tre-card__lvl'; lvEl.textContent = '怪 Lv.' + lv; lvEl.title = '挖圖時可能出現的怪物等級'; top.appendChild(lvEl); }
+      var name = document.createElement('span'); name.className = 'tre-card__name'; name.textContent = g.name;
       var meta = document.createElement('span'); meta.className = 'tre-card__meta';
       meta.appendChild(badge(g.partySize === 8 ? '8 人' : '單人'));
       meta.appendChild(badge('版本 ' + g.expansion, 'gold'));
       if (g.special) meta.appendChild(badge('傳送門', 'neon'));
-      card.appendChild(name); card.appendChild(meta);
+      card.appendChild(top); card.appendChild(name); card.appendChild(meta);
       card.addEventListener('click', function () { selectGrade(g); });
       el['grade-grid'].appendChild(card);
     });
@@ -171,30 +178,41 @@
       on.textContent = '👥 ' + (shared.online || 1) + ' 人' + (ROOM.isConnected() ? '' : '（連線中…）'); row.appendChild(on);
       row.appendChild(roomBtn('離開', function () { ROOM.leave(); }));
     } else {
-      var hint = document.createElement('span'); hint.className = 'tre-roombar__hint codex-small'; hint.textContent = '多人一起挖：'; row.appendChild(hint);
-      row.appendChild(roomBtn('＋ 建立房間', function () {
-        ROOM.create().then(function (c) { toast('房間已建立：' + c + '（把碼給隊友）', 'ok'); }).catch(function () { toast('建立失敗（後端未連上）', 'error'); });
+      // 建立（自動產碼）— 與「加入」明確分開
+      var createG = document.createElement('div'); createG.className = 'tre-roombar__group';
+      var cl = document.createElement('span'); cl.className = 'tre-roombar__grouplbl codex-small'; cl.textContent = '開新房間：'; createG.appendChild(cl);
+      createG.appendChild(roomBtn('＋ 建立房間', function () {
+        ROOM.create().then(function (c) { toast('房間已建立：' + c + '（把房號或邀請連結給隊友）', 'ok'); }).catch(function () { toast('建立失敗（後端未連上）', 'error'); });
       }, 'primary'));
-      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-room-input'; inp.placeholder = '房號'; inp.maxLength = 6; inp.setAttribute('aria-label', '輸入房號'); row.appendChild(inp);
-      row.appendChild(roomBtn('加入', function () { if (!ROOM.join(inp.value)) toast('房號需 6 碼', 'warn'); }));
+      var ch = document.createElement('span'); ch.className = 'tre-roombar__grouphint codex-xs'; ch.textContent = '房號自動產生，分享給隊友'; createG.appendChild(ch);
+      row.appendChild(createG);
+      var orEl = document.createElement('span'); orEl.className = 'tre-roombar__or codex-small'; orEl.textContent = '或'; row.appendChild(orEl);
+      // 加入（貼朋友的房號）
+      var joinG = document.createElement('div'); joinG.className = 'tre-roombar__group';
+      var jl = document.createElement('span'); jl.className = 'tre-roombar__grouplbl codex-small'; jl.textContent = '加入朋友的房間：'; joinG.appendChild(jl);
+      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-room-input'; inp.placeholder = '朋友給的 6 碼房號'; inp.maxLength = 6; inp.setAttribute('aria-label', '輸入朋友的房號'); joinG.appendChild(inp);
+      var doJoin = function () { if (!ROOM.join(inp.value)) toast('房號需 6 碼', 'warn'); };
+      joinG.appendChild(roomBtn('加入', doJoin));
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); });
       var hist = ROOM.history();
       if (hist.length) {
-        var hl = document.createElement('span'); hl.className = 'codex-small tre-roombar__hint'; hl.textContent = '最近：'; row.appendChild(hl);
-        hist.forEach(function (c) { var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'tre-room-chip'; chip.textContent = c; chip.addEventListener('click', function () { ROOM.join(c); }); row.appendChild(chip); });
+        var hl = document.createElement('span'); hl.className = 'codex-small tre-roombar__grouphint'; hl.textContent = '最近：'; joinG.appendChild(hl);
+        hist.forEach(function (c) { var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'tre-room-chip'; chip.textContent = c; chip.addEventListener('click', function () { ROOM.join(c); }); joinG.appendChild(chip); });
       }
+      row.appendChild(joinG);
     }
   }
 
-  // 共享路線每點的小裁切地圖（與 .tre-dig 同技法，縮小版）
+  // 共享路線每點的縮圖：整張小地圖（contain）+ pin 標出該點位置 → 看得出在哪一區的哪裡（比裁切塊好認）
   function makeRouteThumb(r) {
     var m = DATA.maps[r.map] || {};
     var wrap = document.createElement('div'); wrap.className = 'tre-route-item__thumb';
     if (m.image) {
-      var off = TC.calcCardOffset({ x: r.x, y: r.y }, m.sizeFactor || 100, THUMB_W, THUMB_H);
-      var md = document.createElement('div'); md.className = 'tre-route-item__thumbmap';
-      md.style.backgroundImage = 'url("' + m.image + '")'; md.style.left = off.x + 'px'; md.style.top = off.y + 'px';
+      wrap.style.backgroundImage = 'url("' + m.image + '")';
+      var pct = TC.coordsToPercent({ x: r.x, y: r.y }, m.sizeFactor || 100);
       var pin = document.createElement('span'); pin.className = 'tre-route-item__thumbpin'; pin.setAttribute('aria-hidden', 'true');
-      wrap.appendChild(md); wrap.appendChild(pin);
+      pin.style.left = pct.x + '%'; pin.style.top = pct.y + '%';
+      wrap.appendChild(pin);
     }
     return wrap;
   }
@@ -218,7 +236,8 @@
         var zc = document.createElement('span'); zc.className = 'codex-small'; zc.textContent = pts.filter(function (x) { return x.map === r.map; }).length + ' 點';
         head.appendChild(zn); head.appendChild(zc); zoneEl.appendChild(head); el['route-list'].appendChild(zoneEl);
       }
-      var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '');
+      var mine = !!(ROOM && r.owner === ROOM.owner());
+      var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '') + (mine ? ' is-mine' : '');
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
       var thumb = makeRouteThumb(r);
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', '標記完成');
@@ -276,13 +295,23 @@
   });
   document.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { showStep(b.dataset.back); }); });
 
+  var prevKeys = [];   // 上次看到的點 key 清單（偵測隊友新加點用）
   if (ROOM) ROOM.onChange(function (st) {
     var prevCount = shared.points.length, prevOnline = shared.online;
-    shared.points = st.points || []; shared.online = st.online || 0;
+    var newPts = st.points || [];
+    shared.points = newPts; shared.online = st.online || 0;
     renderRoomBar(); renderRoom(); refreshDigAdded();
+    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); prevKeys = []; return; }
     // 有人加入 → 小通知（自己首次連線 prevOnline=0 不報；init / 重連 status==='init' 不報）
     if (ROOM.isInRoom() && st.status !== 'init' && shared.online > prevOnline && prevOnline > 0)
       toast('👥 有人加入房間（' + shared.online + ' 人）', 'ok');
+    // 隊友加點 → 通知（只算別人加的新 key；自己加的不報）
+    if (ROOM.isInRoom() && st.status === 'state') {
+      var me = ROOM.owner();
+      var added = newPts.filter(function (p) { return prevKeys.indexOf(p.key) < 0 && p.owner !== me; });
+      if (added.length) toast('➕ ' + (added[0].ownerName || '隊友') + ' 加了 ' + added.length + ' 個挖掘點', 'ok');
+    }
+    prevKeys = newPts.map(function (p) { return p.key; });
     // 加點後自動套建議順序（只在 op 廣播 'state' 且點數變多時；重排廣播點數不變 → 不再觸發，無迴圈）
     if (ROOM.isInRoom() && st.status === 'state' && shared.points.length > prevCount && shared.points.length >= 2)
       applyOptimize(true);
