@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ffxiv-tw-treasure.pages.dev/sitemap.xml
