@@ -42,6 +42,18 @@ function validateState(s) {
   return s.points.every(validatePoint);
 }
 
+// 正規化單一挖掘點：只保留白名單欄位 + clamp ownerName，丟棄未知欄位。
+// add 與 seed 路徑共用 → 擋「塞超長 ownerName / 額外垃圾欄位」隨每次 state 廣播放大（DoS）。
+function normalizePoint(p) {
+  return {
+    key: p.key, owner: p.owner,
+    ownerName: typeof p.ownerName === "string" ? p.ownerName.slice(0, 24) : "",
+    map: p.map, x: p.x, y: p.y, item: p.item, done: false,
+  };
+}
+// 真位元組長度（常數命名 *_BYTES；String.length 是 UTF-16 code unit，CJK 1 unit=3 bytes）
+const byteLen = (s) => new TextEncoder().encode(s).length;
+
 // op-based 核心：把單一操作套用到 points，回傳「新 points」或 null（null = 無效/no-op，不寫不廣播）。
 // 純函式 → 單元測試直接驗（DO 單執行緒序列呼叫它 = 並發加點不互蓋的證明）。
 function applyOp(points, op) {
@@ -52,11 +64,7 @@ function applyOp(points, op) {
       if (!validatePoint(op.p)) return null;
       if (points.length >= MAX_POINTS) return null;
       if (points.some((q) => q.key === op.p.key)) return null;   // 同 key 已存在 → no-op（idempotent）
-      return points.concat([{
-        key: op.p.key, owner: op.p.owner,
-        ownerName: typeof op.p.ownerName === "string" ? op.p.ownerName.slice(0, 24) : "",
-        map: op.p.map, x: op.p.x, y: op.p.y, item: op.p.item, done: false,
-      }]);
+      return points.concat([normalizePoint(op.p)]);
     }
     case "remove": {
       if (typeof op.key !== "string") return null;
@@ -130,11 +138,11 @@ export default {
       if (parts[0] !== "room") return json({ error: "not_found" }, 404, req);
 
       if (parts.length === 1 && req.method === "POST") {
-        if (rateLimited(roomRate, req.headers.get("CF-Connecting-IP") || "", ROOM_RATE_MAX, ROOM_RATE_WINDOW_MS)) {
-          return json({ error: "rate_limited" }, 429, req);
+        if (rateLimited(roomRate, req.headers.get("CF-Connecting-IP") || "unknown", ROOM_RATE_MAX, ROOM_RATE_WINDOW_MS)) {
+          return json({ error: "rate_limited" }, 429, req);   // 缺 IP → 共用 "unknown" 保守 bucket（不放行）
         }
         const body = await req.text();
-        if (body && body.length > MAX_SEED_BYTES) return json({ error: "payload_too_large" }, 413, req);
+        if (body && byteLen(body) > MAX_SEED_BYTES) return json({ error: "payload_too_large" }, 413, req);
         let seed = {};
         try { seed = body ? JSON.parse(body) : {}; } catch (e) { return json({ error: "bad_json" }, 400, req); }
         if (seed && seed.state != null && !validateState(seed.state)) return json({ error: "bad_state" }, 400, req);
@@ -200,7 +208,7 @@ export class Room {
       let seedPoints = [];
       if (body && body.state) {
         if (!validateState(body.state)) return new Response(JSON.stringify({ error: "bad_state" }), { status: 400, headers: { "Content-Type": "application/json" } });
-        seedPoints = body.state.points;
+        seedPoints = body.state.points.map(normalizePoint);   // 正規化：與 add 路徑一致，丟棄未知欄位 + clamp ownerName
       }
       const expiresAt = Date.now() + EXPIRE_MS;
       await this.ctx.storage.put("state", { points: seedPoints, expiresAt });
@@ -214,28 +222,29 @@ export class Room {
   }
 
   async webSocketMessage(ws, message) {
-    if (typeof message === "string" && message.length > MAX_MSG_BYTES) return;
+    if (typeof message === "string" && byteLen(message) > MAX_MSG_BYTES) return;
     let msg;
     try { msg = JSON.parse(message); } catch (e) { return; }
-    if (msg.t === "ping") { try { ws.send(JSON.stringify({ t: "pong" })); } catch (e) {} return; }
 
-    // per-socket op 速率限制（容許合法爆發、擋洪水）
+    // per-socket 速率限制（ping 也計入 → 擋 ping 洪水；容許合法爆發、擋洪水）
     const e = this._opRate.get(ws);
     const now = Date.now();
     if (!e || now > e.reset) this._opRate.set(ws, { n: 1, reset: now + OP_RATE_WINDOW_MS });
     else if (e.n >= OP_RATE_MAX) return;   // 超速 → 丟
     else e.n++;
 
+    if (msg.t === "ping") { try { ws.send(JSON.stringify({ t: "pong" })); } catch (e2) {} return; }
+
     const st = await this.ctx.storage.get("state");
-    if (st && st.expiresAt && now > st.expiresAt) {   // 過期房：拒 op + 通知關閉
+    if (!st || (st.expiresAt && now > st.expiresAt)) {   // 無 state（過期已清 / 未建）或已過期 → 拒 op + 通知關閉（不復活孤兒房）
       try { ws.send(JSON.stringify({ t: "expired" })); ws.close(1000, "expired"); } catch (e2) {}
       return;
     }
-    const points = (st && Array.isArray(st.points)) ? st.points : [];
+    const points = Array.isArray(st.points) ? st.points : [];
     const next = applyOp(points, msg);     // 套用到權威清單（DO 單執行緒序列 → 並發 op 不互蓋）
     if (next === null) return;             // 無效 / no-op：不寫不廣播
     try {
-      await this.ctx.storage.put("state", { points: next, expiresAt: (st && st.expiresAt) || (Date.now() + EXPIRE_MS) });   // 保留過期時刻
+      await this.ctx.storage.put("state", { points: next, expiresAt: st.expiresAt || (Date.now() + EXPIRE_MS) });   // 保留過期時刻
     } catch (storageErr) {
       try { ws.send(JSON.stringify({ t: "error", reason: "storage_failed" })); } catch (e2) {}
       return;
@@ -252,4 +261,4 @@ export class Room {
 }
 
 // 純函式 export 供單元測試（wrangler 只認 default.fetch + Room class）
-export { applyOp, validatePoint, validateState, originAllowed, genCode };
+export { applyOp, validatePoint, validateState, originAllowed, genCode, normalizePoint };

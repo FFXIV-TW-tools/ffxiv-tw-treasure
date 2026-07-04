@@ -2,7 +2,7 @@
 // 守 op-based 房間核心：applyOp / validatePoint / validateState / genCode / originAllowed。
 // 重點：證明「並發加點不互蓋」— DO 單執行緒序列呼叫 applyOp，兩人各加一點都保留。
 import assert from 'node:assert/strict';
-import { applyOp, validatePoint, validateState, genCode, originAllowed } from '../src/index.js';
+import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint } from '../src/index.js';
 
 const P = (o = {}) => ({ key: 'u1:1.0', owner: 'u1', ownerName: '貓', map: 4, x: 20, y: 20, item: 6688, ...o });
 
@@ -52,6 +52,17 @@ assert.equal(applyOp(big, { t: 'add', p: P({ key: 'k64' }) }), null, '超過 MAX
 // bad op
 assert.equal(applyOp([], { t: 'nope' }), null, '未知 op → null');
 assert.equal(applyOp([], null), null, 'null op → null');
+
+// normalizePoint（add + seed 共用：只留白名單欄位 + clamp ownerName）
+const np = normalizePoint({ key: 'k', owner: 'o', ownerName: 'x'.repeat(50), map: 4, x: 1, y: 2, item: 9, done: true, junk: 'evil', extra: 'x'.repeat(60000) });
+assert.deepEqual(Object.keys(np).sort(), ['done', 'item', 'key', 'map', 'owner', 'ownerName', 'x', 'y'], 'normalizePoint 只留白名單欄位（丟棄 junk/extra）');
+assert.equal(np.ownerName.length, 24, 'ownerName clamp 到 24');
+assert.equal(np.done, false, 'normalizePoint done 一律 false');
+assert.equal(np.junk, undefined, '未知欄位 junk 被丟棄');
+// add 路徑實際套用 normalize（超長 ownerName + 垃圾欄位進不了 storage）
+const added = applyOp([], { t: 'add', p: P({ key: 'z:1', ownerName: 'y'.repeat(40), junk: 1 }) });
+assert.equal(added[0].ownerName.length, 24, 'add 後 ownerName ≤24');
+assert.equal(added[0].junk, undefined, 'add 後無 junk 欄位');
 
 // validateState（建房 seed）
 assert.ok(validateState({ points: [] }), '空 state 合法');
