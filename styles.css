@@ -143,6 +143,7 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   border-radius: var(--radius-md, 8px);
   cursor: pointer; background: var(--color-bg, #080c13);
   transition: border-color var(--transition-fast, .15s);
+  font: inherit; color: inherit; text-align: left; display: block;   /* 中和 <button> UA 樣式 */
 }
 .tre-dig:hover, .tre-dig.is-active, .tre-dig.is-hl { border-color: var(--accent); }
 .tre-dig.is-hl { box-shadow: 0 0 0 2px var(--accent), 0 0 12px var(--accent-soft); }
@@ -165,13 +166,6 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   font-size: var(--fs-xs, 0.75rem); font-weight: var(--fw-bold, 700);
   border-radius: var(--radius-sm, 6px); padding: 0 var(--space-1); line-height: 1.5;
 }
-.tre-dig__coords {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, .72); color: #fff;
-  font-size: var(--fs-xs, 0.75rem); text-align: center; padding: var(--space-1) 0;
-  font-family: var(--font-mono, monospace);
-}
-
 /* ── 側欄全圖 ── */
 .tre-sidemap { position: sticky; top: calc(64px + var(--space-3)); }
 .tre-fullmap {
@@ -195,8 +189,7 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 .tre-footer { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--color-border, #2b3f56); }
 .tre-footer a { color: var(--accent); }
 
-/* 載入/錯誤狀態 */
-.tre-loading { color: var(--color-text-muted, #c0c9da); }
+/* 錯誤狀態（fatalErr）*/
 .tre-error { color: var(--color-danger, #e57373); font-weight: 600; }
 
 /* ── 挖掘卡動作列（複製 / 加入路線）── */
@@ -259,7 +252,6 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   color: var(--accent); background: var(--accent-soft); padding: 2px 10px; border-radius: var(--radius-sm, 6px);
 }
 .tre-roombar__online { color: var(--accent); font-weight: var(--fw-semibold, 600); }
-.tre-roombar__hint { color: var(--color-text-muted, #c0c9da); }
 /* #3：建立 / 加入 明確分組 */
 .tre-roombar__group { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .tre-roombar__grouplbl { color: var(--color-text-muted, #c0c9da); font-weight: var(--fw-semibold, 600); }
@@ -283,4 +275,9 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   .tre-treasure-layout { grid-template-columns: 1fr; }
   .tre-sidemap { position: static; order: -1; }   /* 手機把全圖放上面 */
   .tre-grid--dig { justify-content: center; }     /* 手機單欄置中，不靠左留大空白 */
+  /* 觸控目標放大（手機第二螢幕核心操作；避免誤觸 ✕ 刪掉隊友的點）*/
+  .tre-route-item { gap: var(--space-3); }
+  .tre-route-item input[type="checkbox"] { width: 24px; height: 24px; }
+  .tre-route-item__btn { min-width: 40px; min-height: 40px; padding: 8px; }
+  .tre-fullmap__marker { min-width: 24px; height: 24px; line-height: 22px; }
 }

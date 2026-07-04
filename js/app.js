@@ -122,7 +122,10 @@
     el['dig-grid'].textContent = '';
     pts.forEach(function (p, i) {
       var off = TC.calcCardOffset({ x: p.x, y: p.y }, sf, DIG_W, DIG_H);
-      var card = document.createElement('div'); card.className = 'tre-dig'; card.dataset.idx = i; card.dataset.key = p.id;
+      // button（非 div）→ 鍵盤可 Tab/Enter/Space 操作、螢幕閱讀器可播報（加入共享路線是核心互動）
+      var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-dig'; card.dataset.idx = i; card.dataset.key = p.id;
+      card.setAttribute('aria-label', '加入共享路線 X:' + p.x + ' Y:' + p.y);
+      card.setAttribute('aria-pressed', hasMine(p) ? 'true' : 'false');
       if (hasMine(p)) card.classList.add('is-added');
       var mapDiv = document.createElement('div'); mapDiv.className = 'tre-dig__map';
       if (m.image) mapDiv.style.backgroundImage = 'url("' + m.image + '")';
@@ -137,6 +140,7 @@
       card.title = '點一下加入 / 移出共享路線';
       card.addEventListener('click', function () { toggleMine(p); });
       card.addEventListener('mouseenter', function () { highlight(i, false); });
+      card.addEventListener('focus', function () { highlight(i, false); });
       el['dig-grid'].appendChild(card);
     });
 
@@ -165,7 +169,16 @@
     el['dig-grid'].querySelectorAll('.tre-dig').forEach(function (c) {
       var on = shared.points.some(function (q) { return q.key === own + ':' + c.dataset.key; });
       c.classList.toggle('is-added', on);
+      c.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+  }
+
+  // 送 op 前確認 WS 已連上。斷線/重連視窗內 room.js send() 會靜默丟棄 op，
+  // 若照舊樂觀 toast「已加入」就是謊報成功→掉點。未連上時給誠實回饋、擋下操作。
+  function ensureConnected() {
+    if (ROOM && ROOM.isConnected()) return true;
+    toast('連線中，尚未同步，請稍後再試', 'warn');
+    return false;
   }
 
   function toggleMine(p) {
@@ -174,6 +187,7 @@
       if (el['room-bar'] && el['room-bar'].scrollIntoView) el['room-bar'].scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    if (!ensureConnected()) return;
     var key = myKey(p);
     if (shared.points.some(function (q) { return q.key === key; })) { ROOM.removePoint(key); toast('已從共享路線移除（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
     else { ROOM.addPoint({ key: key, owner: ROOM.owner(), ownerName: ROOM.ownerName(), map: p.map, x: p.x, y: p.y, item: p.item }); toast('➕ 已加入共享路線（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
@@ -262,13 +276,21 @@
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
       var thumb = makeRouteThumb(r);
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', '標記完成');
-      chk.addEventListener('change', function () { ROOM.setDone(r.key, chk.checked); });
+      chk.addEventListener('change', function () {
+        if (!ensureConnected()) { chk.checked = !chk.checked; return; }   // 未連上→還原勾選（op 未送出）
+        ROOM.setDone(r.key, chk.checked);
+      });
       var co = document.createElement('span'); co.className = 'tre-route-item__co codex-body'; co.textContent = 'X:' + r.x + ' Y:' + r.y;
       var owner = document.createElement('span'); owner.className = 'tre-route-item__owner'; owner.textContent = r.ownerName || '';
       var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'tre-route-item__btn'; cp.textContent = '📋'; cp.setAttribute('aria-label', '複製此點');
       cp.addEventListener('click', function () { copyCoords(DATA.maps[r.map] || { zone: zoneName(r.map) }, r); });
       var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'tre-route-item__btn'; rm.textContent = '✕'; rm.setAttribute('aria-label', '移除');
-      rm.addEventListener('click', function () { ROOM.removePoint(r.key); });
+      rm.addEventListener('click', function () {
+        if (!ensureConnected()) return;
+        // 刪自己的點一鍵即可；刪隊友的點才確認（避免默默抹掉別人成果，又不擋正當協作清理）
+        if (!mine && !window.confirm('這是「' + (r.ownerName || '隊友') + '」加的點，移除後對方也看不到。確定移除？')) return;
+        ROOM.removePoint(r.key);
+      });
       item.appendChild(num); item.appendChild(thumb); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
       zoneEl.appendChild(item);
     });
@@ -294,7 +316,22 @@
     el['route-stat'].textContent = msg + ' · 傳送點未計入（規劃中）';
     toast('已算建議順序（同步給全隊）', 'ok');
   }
-  function optimizeRoom() { applyOptimize(false); }
+  function optimizeRoom() { if (!ensureConnected()) return; applyOptimize(false); }
+  // 破壞性操作對全隊權威清單生效、DO 無 undo → 二次確認 + 成功回饋（原本靜默無確認）
+  function clearRoom() {
+    if (!ensureConnected()) return;
+    var n = (shared.points || []).length;
+    if (!n) { toast('清單是空的', 'warn'); return; }
+    if (!window.confirm('將清空整條共享路線，含隊友加的 ' + n + ' 個點，且無法復原。確定清空？')) return;
+    ROOM.clear(); toast('已清空 ' + n + ' 點', 'ok');
+  }
+  function clearDoneRoom() {
+    if (!ensureConnected()) return;
+    var done = (shared.points || []).filter(function (q) { return q.done; }).length;
+    if (!done) { toast('沒有已完成的點', 'warn'); return; }
+    if (!window.confirm('將清除全隊 ' + done + ' 個已完成的點。確定？')) return;
+    ROOM.clearDone(); toast('已清除 ' + done + ' 個已完成', 'ok');
+  }
   function copyRoom() {
     var pts = shared.points || []; if (!pts.length) { toast('清單是空的', 'warn'); return; }
     var lines = [], cur = null;
@@ -307,8 +344,8 @@
     var a = b.dataset.route;
     if (a === 'optimize') optimizeRoom();
     else if (a === 'copy') copyRoom();
-    else if (a === 'clear-done') ROOM.clearDone();
-    else if (a === 'clear') ROOM.clear();
+    else if (a === 'clear-done') clearDoneRoom();
+    else if (a === 'clear') clearRoom();
   });
 
   document.querySelectorAll('.tre-step[data-goto]').forEach(function (b) {
