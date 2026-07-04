@@ -1,0 +1,8 @@
+{
+  "name": "ffxiv-tw-treasure",
+  "private": true,
+  "description": "FFXIV 繁中服藏寶圖挖掘點查詢 + 多人共享路線（前端 + DO worker）",
+  "scripts": {
+    "test": "node tests/core.test.mjs && node tests/drift.test.mjs && node worker/tests/worker.test.mjs"
+  }
+}

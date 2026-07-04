@@ -52,4 +52,18 @@ assert.deepEqual(TC.optimize([]), [], '空陣列');
 assert.deepEqual(TC.optimize(null), [], 'null');
 assert.equal(TC.optimize(single, { useMapGrouping: false }).length, 4, '不分組仍全回');
 
+// ── 2-opt golden：釘 dormant improve2Opt 分支的當前行為（預設關、無產品呼叫者）──
+// 用固定 deepEqual 而非「≤ 非2opt」單調斷言：improve2Opt 是閉環假設（尾端幻邊），
+// analyzeRoute 量開放路徑，2-opt 對開放路徑可能讓指標變大 → 單調斷言會 flaky。只鎖行為。
+const zig = [
+  { id: 'a', mapId: 1, coords: { x: 0, y: 0 } },
+  { id: 'b', mapId: 1, coords: { x: 1, y: 10 } },
+  { id: 'c', mapId: 1, coords: { x: 2, y: 0 } },
+  { id: 'd', mapId: 1, coords: { x: 3, y: 10 } },
+  { id: 'e', mapId: 1, coords: { x: 4, y: 0 } },
+  { id: 'f', mapId: 1, coords: { x: 5, y: 10 } },
+];
+assert.deepEqual(TC.optimize(zig, { use2Opt: false }).map((t) => t.id), ['a', 'c', 'e', 'd', 'b', 'f'], '2-opt 關：greedy NN 順序');
+assert.deepEqual(TC.optimize(zig, { use2Opt: true }).map((t) => t.id), ['a', 'c', 'e', 'f', 'd', 'b'], '2-opt 開：改善交叉後順序（golden）');
+
 console.log('treasure-core: all assertions passed');

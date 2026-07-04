@@ -12,6 +12,8 @@ assert.match(genCode(), /^[0-9A-Z]{6}$/, 'genCode 6 碼 base32');
 // validatePoint
 assert.ok(validatePoint(P()), '合法點');
 assert.ok(!validatePoint(P({ x: 99 })), 'x 超範圍拒');
+assert.ok(!validatePoint(P({ x: NaN })), 'x=NaN 拒（守 !isFinite guard）');
+assert.ok(!validatePoint(P({ y: Infinity })), 'y=Infinity 拒（守 !isFinite guard）');
 assert.ok(!validatePoint(P({ map: '4' })), 'map 非整數拒');
 assert.ok(!validatePoint(P({ key: '' })), '空 key 拒');
 assert.ok(!validatePoint(null), 'null 拒');
