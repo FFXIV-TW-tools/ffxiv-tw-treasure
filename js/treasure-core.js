@@ -101,6 +101,10 @@
     }
     return result;
   }
+  // ⚠ 移植自 reference 的 2-opt 用 (k+1)%length 環狀 wrap（閉環 TSP 假設）。本工具路線是**開放路徑**
+  //   （calcTotalDistance 只累加 n-1 段、不回起點）→ k=末端時的「回起點」幻邊會混進增益判準，
+  //   可能接受讓開放路徑變長的翻轉。目前 use2Opt 預設 false、無產品呼叫者（dormant）。
+  //   啟用前須先修：k=last 時略過尾端幻邊（僅比較 d1 vs d3）。tests/core.test.mjs 有 golden 釘當前行為。
   function improve2Opt(treasures, maxIterations) {
     maxIterations = maxIterations || 50;
     if (treasures.length <= 3) return treasures.slice();

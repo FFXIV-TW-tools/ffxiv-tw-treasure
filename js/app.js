@@ -106,15 +106,22 @@
     showStep('map'); announce('已選 ' + g.name + ' ' + g.grade + '，請選地圖');
   }
 
+  // 依 grade 算各地圖點數 + 按區名排序（renderMaps / renderMapTabs 共用，避免兩處各寫一份分組排序漂移）
+  function mapsForGrade(g) {
+    var pts = (g && DATA.byItem[g.itemId]) || [], counts = {};
+    pts.forEach(function (p) { counts[p.map] = (counts[p.map] || 0) + 1; });
+    var mids = Object.keys(counts).map(Number).sort(function (a, b) { return zoneName(a).localeCompare(zoneName(b), 'zh-Hant'); });
+    return { mids: mids, counts: counts };
+  }
+
   // ── Step 2：地圖 ──
   function renderMaps(g) {
     el['map-grid'].textContent = '';
-    var pts = DATA.byItem[g.itemId] || [], counts = {};
-    pts.forEach(function (p) { counts[p.map] = (counts[p.map] || 0) + 1; });
-    Object.keys(counts).map(Number).sort(function (a, b) { return zoneName(a).localeCompare(zoneName(b), 'zh-Hant'); }).forEach(function (mid) {
+    var mg = mapsForGrade(g), counts = mg.counts;
+    mg.mids.forEach(function (mid) {
       var m = DATA.maps[mid] || {};
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-mapcard';
-      var img = document.createElement('img'); img.className = 'tre-mapcard__thumb'; img.loading = 'lazy'; img.alt = ''; if (m.image) img.src = m.image;
+      var img = document.createElement('img'); img.className = 'tre-mapcard__thumb'; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; if (m.image) img.src = m.image;
       var body = document.createElement('div'); body.className = 'tre-mapcard__body';
       var zone = document.createElement('span'); zone.className = 'tre-mapcard__zone codex-body'; zone.textContent = zoneName(mid);
       var cnt = document.createElement('span'); cnt.className = 'codex-small'; cnt.textContent = counts[mid] + ' 點';
@@ -134,9 +141,7 @@
     var host = el['map-tabs']; if (!host) return;
     host.textContent = '';
     var g = state.grade; if (!g) { host.hidden = true; return; }
-    var pts = DATA.byItem[g.itemId] || [], counts = {};
-    pts.forEach(function (p) { counts[p.map] = (counts[p.map] || 0) + 1; });
-    var mids = Object.keys(counts).map(Number).sort(function (a, b) { return zoneName(a).localeCompare(zoneName(b), 'zh-Hant'); });
+    var mg = mapsForGrade(g), counts = mg.counts, mids = mg.mids;
     if (mids.length <= 1) { host.hidden = true; return; }   // 只有 1 張圖不必顯示
     host.hidden = false;
     var lbl = document.createElement('span'); lbl.className = 'tre-maptabs__lbl codex-small'; lbl.textContent = g.grade + ' 地圖：'; host.appendChild(lbl);
@@ -400,25 +405,35 @@
   document.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { showStep(b.dataset.back); }); });
 
   var prevKeys = [];   // 上次看到的點 key 清單（偵測隊友新加點用）
+  var disconnectedOnce = false;   // 斷過線才在重連時報「已重新連線」（避免首次連線誤報）
   if (ROOM) ROOM.onChange(function (st) {
     var prevCount = shared.points.length, prevOnline = shared.online;
     var newPts = st.points || [];
     shared.points = newPts; shared.online = st.online || 0;
     renderRoomBar(); renderRoom(); refreshDigAdded();
-    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); prevKeys = []; return; }
+    // 連線/同步狀態回饋（斷線時 op 會被丟棄 → 讓使用者看得到）
+    if (st.status === 'joining' || st.status === 'created' || st.status === 'left') disconnectedOnce = false;
+    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); prevKeys = []; disconnectedOnce = false; return; }
+    if (st.status === 'opError') { toast('同步暫時失敗，剛才的操作未生效，請重試', 'error'); return; }
+    if (st.status === 'disconnected') { if (ROOM.isInRoom()) { disconnectedOnce = true; toast('已斷線，重連中…', 'warn'); } return; }
+    if (st.status === 'connected') { if (disconnectedOnce) { disconnectedOnce = false; toast('已重新連線', 'ok'); } return; }
     // 有人加入 → 小通知（自己首次連線 prevOnline=0 不報；init / 重連 status==='init' 不報）
     if (ROOM.isInRoom() && st.status !== 'init' && shared.online > prevOnline && prevOnline > 0)
       toast('👥 有人加入房間（' + shared.online + ' 人）', 'ok');
-    // 隊友加點 → 通知（只算別人加的新 key；自己加的不報）
     if (ROOM.isInRoom() && st.status === 'state') {
       var me = ROOM.owner();
-      var added = newPts.filter(function (p) { return prevKeys.indexOf(p.key) < 0 && p.owner !== me; });
-      if (added.length) toast('➕ ' + (added[0].ownerName || '隊友') + ' 加了 ' + added.length + ' 個挖掘點', 'ok');
+      var newly = newPts.filter(function (p) { return prevKeys.indexOf(p.key) < 0; });
+      // 隊友加點 → 通知（只算別人加的新 key；自己加的不報）
+      var others = newly.filter(function (p) { return p.owner !== me; });
+      if (others.length) toast('➕ ' + (others[0].ownerName || '隊友') + ' 加了 ' + others.length + ' 個挖掘點', 'ok');
+      prevKeys = newPts.map(function (p) { return p.key; });
+      // 只有「加點的當事人」自己觸發重排 → 避免線上 N 人各送一份相同 setOrder（O(N) 放大、逼近 rate limit）。
+      // 重排廣播 key 不變 → newly 空 → iAdded false → 不再觸發，無迴圈。
+      var iAdded = newly.some(function (p) { return p.owner === me; });
+      if (iAdded && shared.points.length > prevCount && shared.points.length >= 2) applyOptimize(true);
+    } else {
+      prevKeys = newPts.map(function (p) { return p.key; });
     }
-    prevKeys = newPts.map(function (p) { return p.key; });
-    // 加點後自動套建議順序（只在 op 廣播 'state' 且點數變多時；重排廣播點數不變 → 不再觸發，無迴圈）
-    if (ROOM.isInRoom() && st.status === 'state' && shared.points.length > prevCount && shared.points.length >= 2)
-      applyOptimize(true);
   });
 
   function fatalErr(msg) { el['grade-grid'].textContent = ''; var p = document.createElement('p'); p.className = 'tre-error codex-body'; p.textContent = msg; el['grade-grid'].appendChild(p); }
