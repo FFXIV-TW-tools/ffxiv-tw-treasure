@@ -14,6 +14,7 @@
   var REJOIN_MS = 6 * 60 * 60 * 1000;
 
   var code = null, ws = null, manualClose = false, retries = 0, reconnectT = null;
+  var hbT = null, lastPong = 0;         // 心跳計時器 + 最後 pong 時刻（偵測半開連線）
   var points = [], online = 0;
   var listeners = [];
 
@@ -35,7 +36,18 @@
     return '玩家' + owner().slice(0, 4);
   }
 
-  function emit(status) { for (var i = 0; i < listeners.length; i++) { try { listeners[i]({ points: points, online: online, code: code, status: status }); } catch (_) {} } }
+  function emit(status) { for (var i = 0; i < listeners.length; i++) { try { listeners[i]({ points: points, online: online, code: code, status: status }); } catch (err) { try { console.warn('room listener error', err); } catch (_) {} } } }
+
+  // 心跳：每 25s 送 ping，逾 60s 未收 pong（半開連線，行動網路切換常見）→ 主動關 socket 觸發重連。
+  function startHeartbeat() {
+    stopHeartbeat(); lastPong = Date.now();
+    hbT = setInterval(function () {
+      if (!ws || ws.readyState !== 1) return;
+      if (Date.now() - lastPong > 60000) { try { ws.close(); } catch (_) {} return; }
+      send({ t: 'ping' });
+    }, 25000);
+  }
+  function stopHeartbeat() { if (hbT) { clearInterval(hbT); hbT = null; } }
 
   function saveRoom() { if (code) lsSet(ROOM_KEY, JSON.stringify({ code: code, savedAt: Date.now() })); else lsDel(ROOM_KEY); }
   function addHist(c) {
@@ -48,10 +60,16 @@
 
   function connect() {
     if (!code) return;
+    clearTimeout(reconnectT); reconnectT = null;   // 清 pending 重連，避免與本次連線重複
+    if (ws && ws.readyState <= 1) return;           // 已有 connecting/open 的 socket → 不重複建（孤兒 + presence 灌水）
     manualClose = false;
-    try { ws = new WebSocket(wsURL(code)); } catch (e) { scheduleReconnect(); return; }
-    ws.onopen = function () { retries = 0; emit('connected'); };
-    ws.onmessage = function (ev) {
+    var socket;
+    try { socket = new WebSocket(wsURL(code)); } catch (e) { scheduleReconnect(); return; }
+    ws = socket;
+    // socket 身分守衛：stale socket（已被新連線取代）的事件一律略過，不動現行狀態
+    socket.onopen = function () { if (ws !== socket) return; retries = 0; startHeartbeat(); emit('connected'); };
+    socket.onmessage = function (ev) {
+      if (ws !== socket) return;
       var m; try { m = JSON.parse(ev.data); } catch (_) { return; }
       if (m.t === 'init' || m.t === 'state') {
         points = Array.isArray(m.points) ? m.points : [];
@@ -59,10 +77,11 @@
         emit(m.t);
       } else if (m.t === 'online') { online = m.online || 0; emit('online'); }
       else if (m.t === 'expired') { manualClose = true; lsDel(ROOM_KEY); code = null; points = []; online = 0; emit('expired'); }
-      // m.t === 'error'(storage_failed)：下次 op 自然重試；m.t === 'pong'：noop
+      else if (m.t === 'pong') { lastPong = Date.now(); }
+      else if (m.t === 'error') { emit('opError'); }   // storage_failed：該 op 未套用，通知 UI 讓使用者重試
     };
-    ws.onclose = function () { ws = null; online = 0; emit('disconnected'); if (!manualClose && code) scheduleReconnect(); };
-    ws.onerror = function () { try { ws.close(); } catch (_) {} };
+    socket.onclose = function () { if (ws !== socket) return; stopHeartbeat(); ws = null; online = 0; emit('disconnected'); if (!manualClose && code) scheduleReconnect(); };
+    socket.onerror = function () { try { socket.close(); } catch (_) {} };
   }
 
   function send(op) { if (ws && ws.readyState === 1) { try { ws.send(JSON.stringify(op)); } catch (_) {} } }
@@ -79,7 +98,8 @@
     code = c; points = []; saveRoom(); addHist(code); connect(); emit('joining'); return true;
   }
   function leave() {
-    manualClose = true; if (ws) { try { ws.close(); } catch (_) {} } ws = null;
+    manualClose = true; stopHeartbeat(); clearTimeout(reconnectT); reconnectT = null;
+    if (ws) { try { ws.close(); } catch (_) {} } ws = null;
     code = null; points = []; online = 0; saveRoom(); emit('left');
   }
 
