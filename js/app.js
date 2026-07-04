@@ -25,6 +25,46 @@
   function copyText(t) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }) : Promise.resolve(false); }
   function copyCoords(m, p) { var t = ((m && m.zone) || '') + ' ( ' + p.x + ' , ' + p.y + ' )'; copyText(t).then(function (ok) { toast(ok ? '已複製：' + t : t, ok ? 'ok' : 'warn'); }); }
 
+  // 依 portal codex-modal 設計系統的確認框（取代原生 confirm）。回傳 Promise<boolean>（確定=true）。
+  // 全程 createElement/textContent（無 innerHTML，CSP friendly）；焦點鎖/還原走 window.FFXIVA11y.trapFocus（fallback no-op）。
+  // 設計系統要求：ESC + overlay 點擊關閉（見 _DESIGN-SYSTEM §codex-modal）。
+  function confirmModal(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div'); overlay.className = 'codex-modal-overlay';
+      var modal = document.createElement('div'); modal.className = 'codex-modal'; modal.style.maxWidth = '440px';
+      modal.setAttribute('role', 'alertdialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', 'tre-confirm-title');
+      var head = document.createElement('div'); head.className = 'codex-modal__header';
+      var h = document.createElement('h3'); h.className = 'codex-h3'; h.id = 'tre-confirm-title'; h.style.margin = '0'; h.textContent = opts.title || '確認';
+      var x = document.createElement('button'); x.type = 'button'; x.className = 'codex-modal__close'; x.textContent = '×'; x.setAttribute('aria-label', '關閉');
+      head.appendChild(h); head.appendChild(x);
+      var body = document.createElement('div'); body.className = 'codex-modal__body';
+      var p = document.createElement('p'); p.className = 'codex-body'; p.style.margin = '0'; p.textContent = opts.message || '';
+      body.appendChild(p);
+      var foot = document.createElement('div'); foot.className = 'codex-modal__footer';
+      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'codex-btn codex-btn--ghost'; cancel.textContent = opts.cancelText || '取消';
+      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'codex-btn codex-btn--' + (opts.danger ? 'danger' : 'primary'); ok.textContent = opts.confirmText || '確定';
+      foot.appendChild(cancel); foot.appendChild(ok);
+      modal.appendChild(head); modal.appendChild(body); modal.appendChild(foot);
+      overlay.appendChild(modal); document.body.appendChild(overlay);
+      var release = (window.FFXIVA11y && FFXIVA11y.trapFocus) ? FFXIVA11y.trapFocus(modal, { initial: ok }) : null;
+      var done = false;
+      function close(val) {
+        if (done) return; done = true;
+        document.removeEventListener('keydown', onKey, true);
+        if (release) release();
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(val);
+      }
+      function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(false); } }
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
+      x.addEventListener('click', function () { close(false); });
+      cancel.addEventListener('click', function () { close(false); });
+      ok.addEventListener('click', function () { close(true); });
+    });
+  }
+
   function setBreadcrumb(active) {
     document.querySelectorAll('.tre-step').forEach(function (b) {
       var key = b.dataset.goto || b.dataset.step;
@@ -288,8 +328,10 @@
       rm.addEventListener('click', function () {
         if (!ensureConnected()) return;
         // 刪自己的點一鍵即可；刪隊友的點才確認（避免默默抹掉別人成果，又不擋正當協作清理）
-        if (!mine && !window.confirm('這是「' + (r.ownerName || '隊友') + '」加的點，移除後對方也看不到。確定移除？')) return;
-        ROOM.removePoint(r.key);
+        if (mine) { ROOM.removePoint(r.key); return; }
+        confirmModal({ title: '移除隊友的點', message: '這是「' + (r.ownerName || '隊友') + '」加的點，移除後對方也看不到。', confirmText: '移除', danger: true }).then(function (yes) {
+          if (yes) ROOM.removePoint(r.key);
+        });
       });
       item.appendChild(num); item.appendChild(thumb); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
       zoneEl.appendChild(item);
@@ -322,15 +364,19 @@
     if (!ensureConnected()) return;
     var n = (shared.points || []).length;
     if (!n) { toast('清單是空的', 'warn'); return; }
-    if (!window.confirm('將清空整條共享路線，含隊友加的 ' + n + ' 個點，且無法復原。確定清空？')) return;
-    ROOM.clear(); toast('已清空 ' + n + ' 點', 'ok');
+    confirmModal({ title: '清空共享路線', message: '將清空整條共享路線，含隊友加的 ' + n + ' 個點，且無法復原。', confirmText: '清空', danger: true }).then(function (yes) {
+      if (!yes) return;
+      ROOM.clear(); toast('已清空 ' + n + ' 點', 'ok');
+    });
   }
   function clearDoneRoom() {
     if (!ensureConnected()) return;
     var done = (shared.points || []).filter(function (q) { return q.done; }).length;
     if (!done) { toast('沒有已完成的點', 'warn'); return; }
-    if (!window.confirm('將清除全隊 ' + done + ' 個已完成的點。確定？')) return;
-    ROOM.clearDone(); toast('已清除 ' + done + ' 個已完成', 'ok');
+    confirmModal({ title: '清除已完成', message: '將清除全隊 ' + done + ' 個已完成的點。', confirmText: '清除', danger: true }).then(function (yes) {
+      if (!yes) return;
+      ROOM.clearDone(); toast('已清除 ' + done + ' 個已完成', 'ok');
+    });
   }
   function copyRoom() {
     var pts = shared.points || []; if (!pts.length) { toast('清單是空的', 'warn'); return; }
