@@ -6,7 +6,7 @@
 - 挖掘點 treasures：**Teamcraft** treasures.json（決策 #5，註明來源 Teamcraft）
 - 地圖 size_factor + 貼圖 URL：本地 data/item_dict/lspl/maps.json（Teamcraft maps 鏡像，map-id keyed）
 - 地區繁中名：本地 data/item_dict/place_names.json（**map-id keyed** — 已驗）
-- 物品繁中名：本地 data/item_dict/item_lookup.sqlite items.name_tc（決策 #1：權威生成，不硬編對照表）
+- 物品繁中名：本地 data/item_dict/item_lookup.sqlite items.name_sc → s2twp（name_tc 對藏寶圖物品是通用「地圖Gxx」錯名，故取 name_sc 再簡→繁；決策 #1：權威生成，不硬編對照表）
 - 等級分級（Gxx / 綠圖 社群慣例 itemId↔grade）：GRADE_CATALOG（事實對照，繁中名仍從 sqlite 生）
 
 DRY 鐵則：所有繁中名走本地權威源，禁自建對照表。

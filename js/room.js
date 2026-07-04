@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   var dev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  var API_PROD = 'https://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev';   // ⚠ deploy 後確認此 URL
+  var API_PROD = 'https://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev';   // 已對齊 _headers connect-src / wrangler name
   var API = dev ? 'http://localhost:8787' : API_PROD;
   function wsURL(c) { return API.replace(/^http/, 'ws') + '/room/' + c + '/ws'; }
 
