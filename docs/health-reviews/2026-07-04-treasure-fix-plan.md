@@ -6,6 +6,26 @@
 
 ---
 
+## ✅ 執行狀態（2026-07-04 全數收尾）
+
+**須修改（必做）— 全部完成並上線**：破壞性操作防呆+回饋（含改 portal codex-modal）· 斷線不謊報成功（`ensureConnected` 兩層 gate）· 挖掘卡鍵盤可用 · 觸控目標 · README drift。
+
+**建議修改（可選）— 幾乎全清**：
+- 後端硬化：seed 正規化 · ping 計入限流 · 真位元組上限 · 復活房拒 op（`!st`）· 缺 IP 保守 bucket ✅
+- 韌性：連線去重 + socket 身分守衛 · client 心跳 · storage_failed 回饋 · emit 不靜默 ✅
+- 正確性/品質：只由加點者觸發重排 · `mapsForGrade` DRY · 2-opt 開放路徑註記 ✅
+- 效能/UX：縮圖 `decoding=async` · 斷線/重連/同步失敗 toast ✅
+- 測試 ratchet：`npm test` 三套（core/drift/worker）+ normalizePoint/NaN/2-opt golden ✅
+
+**刻意不做（記錄）**：
+- CSP `unsafe-inline`→hash（low）：跨工具共享 bootstrap 都用 `unsafe-inline`，單改 treasure 不一致且 bootstrap 一改即失效 → 保留（finding 本身認可）。
+- 打錯房號空房提示（low）：已由「空房送 op 被 `!st` 拒」間接改善；純 client 猜測式提示易誤報 → 不做。
+- route-list 就地 diff（perf P3）/ 2048² 背景層記憶體（a11y A3）：ROI 低、留觀察，回報卡頓再議。
+
+**部署**：前端隨 `main` push 由 CF Pages 自動 build；**worker 硬化需 `pnpm -C worker cf:deploy`**（dry-run 已驗；向後相容、部署順序不拘）。
+
+---
+
 ## 須修改（必做）— 批次化可執行步驟
 
 ### 批次 0：測試地基與機械 ratchet（先做，作後續安全網 + 零成本回歸防護）
