@@ -6,7 +6,7 @@
  * - 座標公式 = FFXIV 官方 datamining MapCoordinates 標準：percent = (coord-1)*SizeFactor/40.96。
  * - 路線優化演算法移植自 cycleapple/xiv-tc-treasure-finder（route-optimizer.js）：
  *   map-grouped greedy 最近鄰 + optional 2-opt；優化歐氏遊戲座標距離（傳送點僅顯示、不計成本）。
- * - 藏寶點 / 地圖 SizeFactor 資料源 = Teamcraft（見 D:/FFXIVProject/FFXIV_API.md #11 maps.json）。
+ * - 藏寶點 / 地圖 SizeFactor 資料源 = Teamcraft（見 C:/FFXIVProject/FFXIV_API.md #11 maps.json）。
  * 移植後以 tests/core.test.mjs 釘 golden 值；另一次性對 reference 跑 parity check 確認行為一致（鐵則 5）。
  */
 (function (root, factory) {

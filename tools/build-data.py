@@ -10,7 +10,7 @@
 - 等級分級（Gxx / 綠圖 社群慣例 itemId↔grade）：GRADE_CATALOG（事實對照，繁中名仍從 sqlite 生）
 
 DRY 鐵則：所有繁中名走本地權威源，禁自建對照表。
-跨機：monorepo 根用 env FFXIV_PROJECT_ROOT，預設 D:/FFXIVProject（對齊 .claude/rules/cross-machine-paths.md）。
+跨機：monorepo 根用 env FFXIV_PROJECT_ROOT，預設 C:/FFXIVProject（對齊 .claude/rules/cross-machine-paths.md）。
 
 用法：python tools/build-data.py  → 寫 data/{grades,maps,treasures}.json + 印涵蓋率報告（有缺即 exit 1）。
 """
@@ -36,7 +36,7 @@ except ImportError:
     print('✗ 需要 opencc（簡→繁）。請用有裝 opencc 的 python 跑，例如：py -3.11 tools/build-data.py', file=sys.stderr)
     sys.exit(1)
 
-ROOT = os.environ.get('FFXIV_PROJECT_ROOT', 'D:/FFXIVProject')
+ROOT = os.environ.get('FFXIV_PROJECT_ROOT', 'C:/FFXIVProject')
 DICT = os.path.join(ROOT, 'data', 'item_dict')
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, '..', 'data'))

@@ -30,7 +30,7 @@
 py -3.11 tools/build-data.py
 ```
 產出 `data/{grades,maps,treasures}.json`（已 commit；部署用）；`data/_teamcraft-treasures.json` 為抓取快取（gitignored）。
-跨機 monorepo 根用 env `FFXIV_PROJECT_ROOT`（預設 `D:/FFXIVProject`）。
+跨機 monorepo 根用 env `FFXIV_PROJECT_ROOT`（預設 `C:/FFXIVProject`）。
 
 ## 驗證
 
