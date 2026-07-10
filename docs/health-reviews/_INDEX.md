@@ -4,4 +4,4 @@
 
 | 日期 | 子專案 | 體質分 | 使用者分 | 報告 | 計畫 | 狀態 |
 |------|--------|:------:|:--------:|------|------|------|
-| 2026-07-04 | treasure（全站）| 7.6 | 7.0 | [報告](2026-07-04-treasure-health-review.md) | [計畫](2026-07-04-treasure-fix-plan.md) | 已完成（須修改+建議全清；前端已上線，worker 待 deploy）|
+| 2026-07-04 | treasure（全站）| 7.6 | 7.0 | [報告](2026-07-04-treasure-health-review.md) | [計畫](2026-07-04-treasure-fix-plan.md) | 已完成（須修改+建議全清；前端已上線，worker 已 deploy 2026-07-04 — 硬化 commit `ce9cbbe` 後 11 分於 11:49:11Z 部署，其後無 worker 改動）|
