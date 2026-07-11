@@ -2,7 +2,7 @@
 // 守 op-based 房間核心：applyOp / validatePoint / validateState / genCode / originAllowed。
 // 重點：證明「並發加點不互蓋」— DO 單執行緒序列呼叫 applyOp，兩人各加一點都保留。
 import assert from 'node:assert/strict';
-import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint } from '../src/index.js';
+import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, MAX_CONN } from '../src/index.js';
 
 const P = (o = {}) => ({ key: 'u1:1.0', owner: 'u1', ownerName: '貓', map: 4, x: 20, y: 20, item: 6688, ...o });
 
@@ -69,13 +69,25 @@ assert.ok(validateState({ points: [] }), '空 state 合法');
 assert.ok(validateState({ points: [P()] }), 'state 含合法點');
 assert.ok(!validateState({ points: 'x' }), 'points 非陣列拒');
 assert.ok(!validateState({ points: [P({ x: 99 })] }), 'state 含畸形點拒');
+// seed 65 點（> MAX_POINTS 64）：建房 seed 超量拒（守 POST /room 的 validateState 閘）
+const seed65 = { points: [] };
+for (let i = 0; i < 65; i++) seed65.points.push(P({ key: 'k' + i }));
+assert.ok(!validateState(seed65), 'seed 65 點（>MAX_POINTS）拒');
 
-// originAllowed
+// originAllowed（POST /room 與 WS 升級共用此閘：!originAllowed → 403）
 const mk = (o) => ({ headers: { get: () => o } });
 assert.ok(originAllowed(mk('https://ffxiv-tw-treasure.pages.dev')), '正式站 OK');
 assert.ok(originAllowed(mk('https://abc123.ffxiv-tw-treasure.pages.dev')), 'CF preview 子網域 OK');
 assert.ok(originAllowed(mk('http://localhost:8774')), 'localhost OK');
 assert.ok(!originAllowed(mk('https://evil.pages.dev')), '他站 pages.dev 拒');
 assert.ok(!originAllowed(mk('https://ffxiv-tw-treasure.pages.dev.evil.com')), '前綴偽裝拒');
+assert.ok(!originAllowed(mk('')), '無 Origin header 拒（POST /room 無 Origin → 403）');
+
+// roomFull：單房 WS 連線軟上限邊界（MAX_CONN=32；達 32 拒第 33 條）
+assert.equal(MAX_CONN, 32, 'MAX_CONN=32');
+assert.equal(roomFull(0), false, '0 連線未滿');
+assert.equal(roomFull(31), false, '31 連線未滿（放行第 32）');
+assert.equal(roomFull(32), true, '32 連線已滿（拒第 33）');
+assert.equal(roomFull(64), true, '超量已滿');
 
 console.log('worker(treasure-room): all assertions passed');
