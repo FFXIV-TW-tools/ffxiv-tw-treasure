@@ -72,9 +72,19 @@
     });
     var mapBtn = document.querySelector('.tre-step[data-goto="map"]'); if (mapBtn) mapBtn.disabled = !state.grade;
   }
+  var STEP_PANEL = { grade: 'step-grade', map: 'step-map', treasure: 'step-treasure' };
+  var stepReady = false;   // 首次（載入時）showStep 不搶焦點，之後每次切換才移焦到新面板標題
+  // 三步切換時把焦點移到新面板標題（tabindex=-1）→ 鍵盤/螢幕閱讀器落到新內容，不卡在舊步驟
+  function focusStepHeading(name) {
+    var panel = el[STEP_PANEL[name]]; if (!panel) return;
+    var h = panel.querySelector('.codex-h2'); if (!h) return;
+    h.setAttribute('tabindex', '-1');
+    try { h.focus(); } catch (_) {}
+  }
   function showStep(name) {
     el['step-grade'].hidden = name !== 'grade'; el['step-map'].hidden = name !== 'map'; el['step-treasure'].hidden = name !== 'treasure';
     setBreadcrumb(name);
+    if (stepReady) focusStepHeading(name); else stepReady = true;
   }
 
   // 怪物等級＝該版本上限（7.x=100 / 6.x=90 / 5.x=80 / 4.x=70 / 3.x=60；綠圖 4.05→70）。挖圖時可能出現的怪等。
@@ -177,7 +187,7 @@
       mapDiv.style.left = off.x + 'px'; mapDiv.style.top = off.y + 'px';
       var pin = document.createElement('span'); pin.className = 'tre-dig__pin';
       var num = document.createElement('span'); num.className = 'tre-dig__num'; num.textContent = String(i + 1);
-      var tick = document.createElement('span'); tick.className = 'tre-dig__tick'; tick.textContent = '✓'; tick.setAttribute('aria-hidden', 'true');
+      var tick = document.createElement('span'); tick.className = 'tre-dig__tick'; tick.setAttribute('aria-hidden', 'true');   // ➕/✓ 常駐 affordance 由 CSS ::after 依 .is-added 切
       var bar = document.createElement('div'); bar.className = 'tre-dig__bar';
       var co = document.createElement('span'); co.className = 'tre-dig__co'; co.textContent = 'X:' + p.x + ' Y:' + p.y;
       bar.appendChild(co);
@@ -303,7 +313,8 @@
     el['route-panel'].hidden = !inRoom;
     if (!inRoom) return;
     var pts = shared.points || [];
-    el['route-count'].textContent = pts.length ? '（' + pts.length + ' 點）' : '';
+    var doneN = pts.filter(function (q) { return q.done; }).length;   // U4：標題常駐「已完成 X / 共 Y 點」完成進度彙總
+    el['route-count'].textContent = pts.length ? '（已完成 ' + doneN + ' / 共 ' + pts.length + ' 點）' : '';
     el['route-empty'].hidden = pts.length > 0;
     el['route-list'].textContent = '';
     if (!pts.length) { el['route-stat'].hidden = true; return; }
@@ -413,10 +424,11 @@
     renderRoomBar(); renderRoom(); refreshDigAdded();
     // 連線/同步狀態回饋（斷線時 op 會被丟棄 → 讓使用者看得到）
     if (st.status === 'joining' || st.status === 'created' || st.status === 'left') disconnectedOnce = false;
-    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); prevKeys = []; disconnectedOnce = false; return; }
-    if (st.status === 'opError') { toast('同步暫時失敗，剛才的操作未生效，請重試', 'error'); return; }
-    if (st.status === 'disconnected') { if (ROOM.isInRoom()) { disconnectedOnce = true; toast('已斷線，重連中…', 'warn'); } return; }
-    if (st.status === 'connected') { if (disconnectedOnce) { disconnectedOnce = false; toast('已重新連線', 'ok'); } return; }
+    // 連線/同步事件同步進 #tre-status（aria-live）→ 螢幕閱讀器聽得到，不只靠視覺 toast（U3）
+    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); announce('房間已過期，請重新建立房間'); prevKeys = []; disconnectedOnce = false; return; }
+    if (st.status === 'opError') { toast('同步暫時失敗，剛才的操作未生效，請重試', 'error'); announce('同步暫時失敗，剛才的操作未生效，請重試'); return; }
+    if (st.status === 'disconnected') { if (ROOM.isInRoom()) { disconnectedOnce = true; toast('已斷線，重連中…', 'warn'); announce('已斷線，重新連線中'); } return; }
+    if (st.status === 'connected') { if (disconnectedOnce) { disconnectedOnce = false; toast('已重新連線', 'ok'); announce('已重新連線'); } return; }
     // 有人加入 → 小通知（自己首次連線 prevOnline=0 不報；init / 重連 status==='init' 不報）
     if (ROOM.isInRoom() && st.status !== 'init' && shared.online > prevOnline && prevOnline > 0)
       toast('👥 有人加入房間（' + shared.online + ' 人）', 'ok');

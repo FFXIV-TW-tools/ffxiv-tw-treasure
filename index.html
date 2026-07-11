@@ -120,8 +120,8 @@
       </div>
     </section>
 
-    <!-- 我的路線（記錄 + 分組 + 建議順序）— 跨步驟常駐 -->
-    <section id="route-panel" class="codex-tablet codex-tablet--cyan tre-panel">
+    <!-- 我的路線（記錄 + 分組 + 建議順序）— 跨步驟常駐；初始 hidden，app.js renderRoom 依是否在房間顯示（避免載入閃現）-->
+    <section id="route-panel" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
         <h2 class="codex-h2">🧭 共享路線 <span id="route-count" class="codex-small"></span></h2>
@@ -133,7 +133,7 @@
         </div>
       </div>
       <p id="route-stat" class="codex-small" hidden></p>
-      <p id="route-empty" class="tre-hint">房間裡還沒有點。到挖掘點卡片按「➕」把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
+      <p id="route-empty" class="tre-hint">房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
       <div id="route-list" class="tre-route-list"></div>
     </section>
 

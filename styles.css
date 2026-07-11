@@ -199,15 +199,19 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   background: rgba(0, 0, 0, .72); padding: 2px var(--space-1);
 }
 .tre-dig__co { flex: 1; color: #fff; font-size: var(--fs-xs, 0.75rem); font-family: var(--font-mono, monospace); }
+/* 常駐加入 affordance：未加入＝ surface 底 ➕、已加入＝ accent 底 ✓（glyph 走 ::after 依 .is-added 切）*/
 .tre-dig__tick {
   position: absolute; top: var(--space-1); right: var(--space-1); z-index: 3;
   width: 24px; height: 24px; border-radius: var(--radius-pill, 999px);
-  background: var(--accent); color: var(--color-bg, #080c13);
-  display: none; align-items: center; justify-content: center;
+  background: var(--color-surface, #101824); color: var(--color-text, #f5f5f5);
+  border: 1px solid var(--accent);
+  display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: var(--fw-bold, 700); box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
 }
+.tre-dig__tick::after { content: '➕'; }
 .tre-dig.is-added { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
-.tre-dig.is-added .tre-dig__tick { display: flex; }
+.tre-dig.is-added .tre-dig__tick { background: var(--accent); color: var(--color-bg, #080c13); }
+.tre-dig.is-added .tre-dig__tick::after { content: '✓'; }
 
 /* ── 我的路線面板 ── */
 .tre-route-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
