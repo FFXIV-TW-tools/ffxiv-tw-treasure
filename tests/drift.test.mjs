@@ -33,9 +33,12 @@ for (const [mid, m] of Object.entries(maps)) {
 }
 
 // ── 3. 無死 .tre-* CSS（styles.css 定義的每個都要有人用）──
+// token 邊界比對（非子字串）：class 名前後不得緊接 class 字元 [a-z0-9_-]，
+// 否則父類 `tre-dig` 會被子類 `tre-dig__map` 的子字串「誤判為已使用」→ 真死父類漏抓。
 const src = appJs + roomJs + html;
 const defined = new Set([...css.matchAll(/\.(tre-[a-z0-9_-]+)/gi)].map((m) => m[1]));
-const dead = [...defined].filter((cls) => !src.includes(cls));
-assert.deepEqual(dead, [], `發現死 CSS class（styles.css 定義但無人引用）：${dead.join(', ')}`);
+const usedAsToken = (cls) => new RegExp('(?<![a-z0-9_-])' + cls + '(?![a-z0-9_-])').test(src);
+const dead = [...defined].filter((cls) => !usedAsToken(cls));
+assert.deepEqual(dead, [], `發現死 CSS class（styles.css 定義但無人以完整 token 引用）：${dead.join(', ')}`);
 
 console.log('drift: all assertions passed');

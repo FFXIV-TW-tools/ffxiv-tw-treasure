@@ -3,6 +3,7 @@
  * client 只送「操作」，不送整份；DO 權威套用後廣播 {t:'state', points} → 收到就 render（並發加點不互蓋）。 */
 (function () {
   'use strict';
+  var PURE = window.TreasureRoomPure;   // room-pure.js（同 origin defer，於本檔前載入）：backoffDelay / sanitizeJoinCode
   var dev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   var API_PROD = 'https://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev';   // 已對齊 _headers connect-src / wrangler name
   var API = dev ? 'http://localhost:8787' : API_PROD;
@@ -56,7 +57,7 @@
   }
   function roomHistory() { try { var h = JSON.parse(lsGet(HIST_KEY) || '[]'); return Array.isArray(h) ? h : []; } catch (_) { return []; } }
 
-  function scheduleReconnect() { retries++; clearTimeout(reconnectT); reconnectT = setTimeout(connect, Math.min(15000, 1000 * Math.pow(2, Math.min(retries, 4)))); }
+  function scheduleReconnect() { retries++; clearTimeout(reconnectT); reconnectT = setTimeout(connect, PURE.backoffDelay(retries)); }
 
   function connect() {
     if (!code) return;
@@ -92,7 +93,7 @@
       .then(function (d) { if (!d || !d.code) throw new Error('no_code'); code = d.code; points = []; saveRoom(); addHist(code); connect(); emit('created'); return code; });
   }
   function join(c) {
-    c = (c || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    c = PURE.sanitizeJoinCode(c);
     if (c.length !== 6) return false;
     if (ws) { manualClose = true; try { ws.close(); } catch (_) {} ws = null; }
     code = c; points = []; saveRoom(); addHist(code); connect(); emit('joining'); return true;
