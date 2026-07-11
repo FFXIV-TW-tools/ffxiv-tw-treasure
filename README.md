@@ -2,7 +2,7 @@
 
 選等級 → 選地圖 → 比對謎題圖找挖寶座標。繁中服（陸行鳥 DC）藏寶圖挖掘點查詢工具。
 
-**Pages URL**：https://ffxiv-tw-treasure.pages.dev/ （部署後）
+**Pages URL**：https://ffxiv-tw-treasure.pages.dev/
 
 ---
 
@@ -35,10 +35,11 @@ py -3.11 tools/build-data.py
 ## 驗證
 
 ```bash
-npm test   # 一次跑三支：core（座標/路線 golden）+ drift（常數/資料/死 CSS）+ worker（op-based 並發不互蓋）
+npm test   # 一次跑四支：core（座標/路線 golden）+ room-pure（退避/房號淨化）+ drift（常數/資料/死 CSS）+ worker（op-based 並發不互蓋）
 # 或個別跑：
 node tests/core.test.mjs      # 座標換算 + 路線優化 golden（演算法移植自 Teamcraft-derived reference，已對 parity）
-node tests/drift.test.mjs     # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS
+node tests/room-pure.test.mjs # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化
+node tests/drift.test.mjs     # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS（token 邊界比對）
 node worker/tests/worker.test.mjs   # 多人房間 applyOp / validate / originAllowed（含「並發加點不互蓋」證明）
 ```
 
@@ -50,10 +51,12 @@ styles.css              # 工具樣式（用 portal token / codex 元件）
 js/treasure-core.js     # 座標換算 + 路線優化（純函式，window.TreasureCore）
 js/app.js               # 三步狀態機 + 裁切卡渲染 + 複製座標 + 房間 UI
 js/room.js              # 多人共享路線 client（WebSocket、op-based，window.TreasureRoom）
+js/room-pure.js         # room client 純輔助（UMD，可單元測試）：backoffDelay + sanitizeJoinCode
 worker/                 # 多人房間後端：Cloudflare Durable Object（op-based、SQLite、6h alarm 過期）
 data/{grades,maps,treasures}.json   # 生成資料（build-data.py 產）
 tools/build-data.py     # 資料生成（Teamcraft + item_dict 繁中）
 tests/core.test.mjs     # 演算法 golden test
+tests/room-pure.test.mjs # room 純輔助（backoff/房號淨化）單元測試
 tests/drift.test.mjs    # 常數/資料/死 CSS 機械檢查
 worker/tests/worker.test.mjs   # 房間 op-based 並發正確性
 ```
