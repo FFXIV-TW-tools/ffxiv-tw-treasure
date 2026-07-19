@@ -85,7 +85,7 @@ cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 
 
 ## 開發循環（DEVLOOP）
 
-正典：`~/.claude/process/DEVLOOP.md`；本 repo 工件：`CHANGELOG.md`、`docs/BACKLOG.md`（本 repo 目前無 `docs/specs/`——小工具多走旁路，需 spec 時建）。摘要（對齊 DEVLOOP v1.7；正典不可得時以此為準）：
+正典：`~/.claude/process/DEVLOOP.md`；本 repo 工件：`CHANGELOG.md`、`docs/BACKLOG.md`（本 repo 目前無 `docs/specs/`——小工具多走旁路，需 spec 時建）。摘要（對齊 DEVLOOP v1.8；正典不可得時以此為準）：
 
 1. 循環：Intake→Brainstorm→[Gate1 Owner 拍板 spec]→Plan→Build(TDD，適用可測行為變更；純文件走 lint/smoke)→Verify→Review→Record(changelog)→Close+Propose→[Gate2 驗收＋排序]→回 BACKLOG。
 2. 小修旁路可跳 spec/plan；**Verify 與 Record 永不可跳**（測試綠＋changelog 一行）；資料模型／對外契約／刪除遷移／安全類**即使單檔不可旁路**。
