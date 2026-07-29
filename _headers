@@ -20,4 +20,4 @@
 
 # 生成資料 JSON — 短 cache + revalidate（版本變動由 ETag 抓出）
 /data/*
-  Cache-Control: public, max-age=600, must-revalidate
+  Cache-Control: public, max-age=0, must-revalidate
