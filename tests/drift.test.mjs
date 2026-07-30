@@ -35,6 +35,19 @@ for (const [mid, m] of Object.entries(maps)) {
   assert.ok(!/["'()\s]/.test(m.image), `map ${mid} image 不得含 url() 破壞字元：${m.image}`);
 }
 
+// ── 2a. 圖片主機必須在 _headers 的 CSP img-src 白名單內 ──
+// 2026-07-30 實踩：上游把地圖網址換成 v2.xivapi.com，CSP 只放行 xivapi.com → 線上地圖全黑；
+// 本機 http.server 不套 _headers 所以測不出來。此檢查把「資料裡的主機 ⊆ CSP 白名單」機械化。
+const headers = read('_headers');
+const imgSrc = /img-src ([^;]+);/.exec(headers)?.[1] || '';
+const imgHosts = new Set(imgSrc.split(/\s+/).filter((t) => t.startsWith('https://')));
+const usedHosts = new Set();
+for (const m of Object.values(maps)) if (m.image) usedHosts.add(new URL(m.image).origin);
+for (const js of [rmapJs, appJs, modalJs]) {
+  for (const u of js.matchAll(/https:\/\/[\w.-]+\/[\w./-]*\.png/g)) usedHosts.add(new URL(u[0]).origin);
+}
+for (const h of usedHosts) assert.ok(imgHosts.has(h), `圖片主機 ${h} 不在 _headers img-src 白名單（線上會被 CSP 擋成空白/全黑）`);
+
 // ── 2b. 傳送水晶（主水晶 type 0）座標健全性 ──
 // 只收主水晶：以太之光（type 1）是區域出口／換圖點、不是傳送目的地（2026-07-30 Owner 判定）。
 // 沒有主水晶的圖是真的沒有（如 map 213 龍堡內陸低地），故不斷言「每張圖都有」，只驗值域 + 總量不塌。

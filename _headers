@@ -6,9 +6,11 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://ffxiv-tw-tools-portal.pages.dev https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://ffxiv-tw-tools-portal.pages.dev; img-src 'self' data: https://ffxiv-tw-tools-portal.pages.dev https://xivapi.com; connect-src 'self' https://ffxiv-tw-tools-settings-api.ffxiv-tw-tools.workers.dev https://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev wss://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev https://cloudflareinsights.com; media-src 'self' https://ffxiv-tw-tools-portal.pages.dev; font-src 'self' https://ffxiv-tw-tools-portal.pages.dev data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://ffxiv-tw-tools-portal.pages.dev https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://ffxiv-tw-tools-portal.pages.dev; img-src 'self' data: https://ffxiv-tw-tools-portal.pages.dev https://v2.xivapi.com https://xivapi.com; connect-src 'self' https://ffxiv-tw-tools-settings-api.ffxiv-tw-tools.workers.dev https://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev wss://ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev https://cloudflareinsights.com; media-src 'self' https://ffxiv-tw-tools-portal.pages.dev; font-src 'self' https://ffxiv-tw-tools-portal.pages.dev data:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'
 
-# img-src 含 xivapi.com → 地圖貼圖（/m/...）；portal → fat-cat sprite（background-image 吃 img-src）
+# img-src 兩個 xivapi 網域都要：v2.xivapi.com＝現行地圖貼圖（上游 2026-07 換 v2，/api/asset/map/...）、
+# xivapi.com＝舊形狀貼圖與圖示（/m/...、/i/...）；portal → fat-cat sprite（background-image 吃 img-src）。
+# ⚠ 少放 v2 會讓所有地圖被 CSP 擋成全黑，且本機 http.server 不套 _headers → 測不出來（2026-07-30 實踩）。
 
 # 工具自家 JS / CSS — max-age=0 + must-revalidate → F5 走 ETag 304，push 完即時更新免硬刷
 /*.js
