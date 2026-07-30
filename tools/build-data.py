@@ -43,6 +43,12 @@ OUT = os.path.normpath(os.path.join(HERE, '..', 'data'))
 CACHE = os.path.join(OUT, '_teamcraft-treasures.json')
 TEAMCRAFT_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcraft/'
                  'staging/libs/data/src/lib/json/treasures.json')
+AETHERYTE_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcraft/'
+                 'staging/libs/data/src/lib/json/aetherytes.json')
+AETHERYTE_CACHE = os.path.join(OUT, '_teamcraft-aetherytes.json')
+# ⚠ 不以 type 過濾：type 1 在野外圖上是**聚落水晶**（如龍堡內陸低地的泰勒斐爾／阿涅斯特里恩），
+# 遊戲裡照樣傳得到；只濾 type 0 會讓 map 213 一顆都不剩（2026-07-30 實測）。城內 aethernet shard
+# 只存在於城市地圖，而城市地圖不是藏寶圖區 → 天然不會混進來，不必再濾。
 
 # 社群分級（高→低）：itemId → (grade 標籤, 版本)。繁中名不寫這裡，從 item_lookup 生成。
 # G18/46185 暫不列（繁中名未進 item_lookup，與 reference 一致；item_dict 月更後補）。
@@ -75,6 +81,25 @@ def fetch_treasures():
         sys.exit(1)
 
 
+def fetch_aetherytes():
+    """抓 Teamcraft aetherytes.json（快取；失敗回退快取，與 treasures 同策略）。"""
+    try:
+        req = urllib.request.Request(AETHERYTE_URL, headers={'User-Agent': 'ffxiv-tw-treasure/1.0'})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        with open(AETHERYTE_CACHE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        print(f'✓ Teamcraft aetherytes.json 抓取 {len(data)} 筆（快取 {AETHERYTE_CACHE}）')
+        return data
+    except Exception as e:  # noqa: BLE001 — build 腳本，網路失敗回退快取
+        if os.path.exists(AETHERYTE_CACHE):
+            print(f'⚠ 水晶抓取失敗（{e}），用快取 {AETHERYTE_CACHE}')
+            with open(AETHERYTE_CACHE, encoding='utf-8') as f:
+                return json.load(f)
+        print(f'✗ 水晶抓取失敗且無快取：{e}', file=sys.stderr)
+        sys.exit(1)
+
+
 def load_local():
     with open(os.path.join(DICT, 'place_names.json'), encoding='utf-8') as f:
         places = json.load(f)            # map-id(str) -> {place, region}
@@ -91,6 +116,7 @@ def load_local():
 def main():
     os.makedirs(OUT, exist_ok=True)
     raw = fetch_treasures()
+    aeth_raw = fetch_aetherytes()
     places, maps, names = load_local()
 
     # 只收 GRADE_CATALOG 內的 itemId（玩家實際使用的可採集等級；舊 ARR/特殊圖點位不 surface）
@@ -123,15 +149,22 @@ def main():
             gaps.append(f'map {mid} 無繁中地名（place_names.json 缺 key）')
         if sf is None or not img:
             gaps.append(f'map {mid} 無 size_factor/image（maps.json 缺）')
+        # 可傳送大水晶（type 0）：畫在路線圖上讓人看得出該傳哪一顆；名稱不帶（無台服正名權威源，
+        # 禁自創譯名 → 只給位置，見 docs/specs/2026-07-30-aetheryte-on-map-design.md）
+        aeths = [{'x': round(a['x'], 2), 'y': round(a['y'], 2)}
+                 for a in aeth_raw if a.get('map') == mid]
+        if not aeths:
+            gaps.append(f'map {mid} 無傳送水晶（aetherytes.json 缺該 map）')
         out_maps[mid] = {'id': mid, 'zone': zone, 'region': region,
-                         'sizeFactor': sf, 'image': img}
+                         'sizeFactor': sf, 'image': img, 'aetherytes': aeths}
 
     # treasures.json（精簡：id,x,y,map,partySize,item）
     out_pts = [{'id': t['id'], 'x': round(t['coords']['x'], 2), 'y': round(t['coords']['y'], 2),
                 'map': t['map'], 'partySize': t.get('partySize'), 'item': t['item']} for t in pts]
 
-    meta = {'source': 'Teamcraft (treasures.json) · 物品名 item_lookup.name_sc→s2twp · 地名 place_names（本地權威）',
-            'gradeCount': len(grades), 'mapCount': len(out_maps), 'pointCount': len(out_pts)}
+    meta = {'source': 'Teamcraft (treasures.json + aetherytes.json) · 物品名 item_lookup.name_sc→s2twp · 地名 place_names（本地權威）',
+            'gradeCount': len(grades), 'mapCount': len(out_maps), 'pointCount': len(out_pts),
+            'aetheryteCount': sum(len(m['aetherytes']) for m in out_maps.values())}
 
     for fn, obj in [('grades.json', {'_meta': meta, 'grades': grades}),
                     ('maps.json', {'_meta': meta, 'maps': out_maps}),

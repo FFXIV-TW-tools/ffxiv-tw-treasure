@@ -267,4 +267,8 @@ export class Room {
 }
 
 // 純函式 export 供單元測試（wrangler 只認 default.fetch + Room class）
-export { applyOp, validatePoint, validateState, originAllowed, genCode, normalizePoint, roomFull, MAX_CONN };
+// ⚠ 只導出 function：workerd 會把 module 的具名導出當 entrypoint 檢查，導出裸值（如 number）
+// 會讓整支 worker 起不來（`Incorrect type for map entry 'MAX_CONN': not of type 'function or ExportedHandler'`）
+// → `wrangler dev` 直接掛掉、本地無法端到端測。常數改以 getter 導出（2026-07-30 B-004）。
+function maxConn() { return MAX_CONN; }
+export { applyOp, validatePoint, validateState, originAllowed, genCode, normalizePoint, roomFull, maxConn };

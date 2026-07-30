@@ -2,7 +2,7 @@
 // 守 op-based 房間核心：applyOp / validatePoint / validateState / genCode / originAllowed。
 // 重點：證明「並發加點不互蓋」— DO 單執行緒序列呼叫 applyOp，兩人各加一點都保留。
 import assert from 'node:assert/strict';
-import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, MAX_CONN } from '../src/index.js';
+import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, maxConn } from '../src/index.js';
 
 const P = (o = {}) => ({ key: 'u1:1.0', owner: 'u1', ownerName: '貓', map: 4, x: 20, y: 20, item: 6688, ...o });
 
@@ -84,7 +84,7 @@ assert.ok(!originAllowed(mk('https://ffxiv-tw-treasure.pages.dev.evil.com')), '�
 assert.ok(!originAllowed(mk('')), '無 Origin header 拒（POST /room 無 Origin → 403）');
 
 // roomFull：單房 WS 連線軟上限邊界（MAX_CONN=32；達 32 拒第 33 條）
-assert.equal(MAX_CONN, 32, 'MAX_CONN=32');
+assert.equal(maxConn(), 32, 'MAX_CONN=32（以 getter 導出：workerd 拒收裸值導出，會讓 wrangler dev 起不來）');
 assert.equal(roomFull(0), false, '0 連線未滿');
 assert.equal(roomFull(31), false, '31 連線未滿（放行第 32）');
 assert.equal(roomFull(32), true, '32 連線已滿（拒第 33）');

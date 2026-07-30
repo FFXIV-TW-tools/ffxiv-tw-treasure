@@ -3,6 +3,22 @@
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
 
+## 2026-07-30 — 地圖上顯示傳送水晶 ＋ 修好本地 wrangler dev
+
+> cycle `2026-07-30-aetheryte-on-map`（spec: [docs/specs/2026-07-30-aetheryte-on-map-design.md](docs/specs/2026-07-30-aetheryte-on-map-design.md)；動生成資料 schema 故不走旁路）。
+
+### Added
+- **區域大圖與放大檢視都畫出傳送水晶**（金色菱形，與挖掘點的圓形編號標記一眼可分）：看得出這區該傳哪一顆過去。資料＝Teamcraft `aetherytes.json`（與現用 `treasures.json` 同源），寫進 `data/maps.json` 各 map 的 `aetherytes:[{x,y}]`（新增欄位、向後相容），28 張圖共 81 顆。
+  - **不顯示水晶名稱**：名稱需 `nameid`→PlaceName 的台服正名，本地無權威源（`place_names.json` 是地區名、`datamining_tc/` 無 Aetheryte/PlaceName sheet、`game_ref.sqlite` 無該表——逐項排除見 spec），依鐵則「禁自建對照表／禁自創譯名」只給位置。
+  - **不以 `type` 過濾**（推翻初版設計）：原打算只取 type 0，實測 map 213（龍堡內陸低地）只有 type 1 的兩顆＝泰勒斐爾／阿涅斯特里恩，遊戲裡傳得到 → 過濾掉會讓該圖一顆不剩。已把此案例寫成 drift 斷言（每張圖必有水晶 + 座標範圍）擋回歸。
+### Fixed
+- **B-004：本地 `wrangler dev` 起不來**——`worker/src/index.js` 為測試導出常數 `MAX_CONN`（number），workerd 把 module 具名導出當 entrypoint 檢查、拒收裸值（`not of type 'function or ExportedHandler'`），整支 worker 起不來。改以 getter `maxConn()` 導出。**影響**：本輪起可本地端到端測真房間（前三輪只能靠純函式測試 + 手動組 DOM）。
+### Verified
+- `npm test` 4 套全綠 **81 → 83 assert**（只升；新增 drift 水晶斷言 2 條）。
+- `py -3.11 tools/build-data.py` 重建 0 缺口：13 grades / 28 maps / 477 points / 81 水晶，map 213 = 2 顆（回歸案例）。
+- **端到端（本地 worker + 真房間）**：`wrangler dev` Ready → 建房 `ZJBZDM` 連上 → 加 3 點 → 左清單 3 列（含玩家名）／右大圖 3 編號標記 + 2 顆水晶；放大檢視同樣 3 標記 + 2 水晶、ESC 可關；清空 + 離開房間乾淨（截圖確認）。
+- ⚠️ 本機 `python -m http.server` 不發 no-cache，改資料檔後要 hard reload 才看得到新 `maps.json`（線上 `_headers` 已是 `max-age=0`+ETag，無此問題）。
+
 ## 2026-07-30 — 共享路線直接畫出順序（區域大圖）＋ 複製整條改輸出遊戲巨集
 > cycle `2026-07-30-route-map`（旁路：前端可逆改動；worker 未動、不需 deploy）。承上一段（顯示名／放大檢視）的同一輪對話收斂。
 ### Added

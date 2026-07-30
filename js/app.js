@@ -290,6 +290,12 @@
     }
   }
 
+  // 水晶座標 → 百分比（與挖掘點同一套換算）；缺欄位（舊快取資料）時回空陣列，不炸
+  function aethPct(m) {
+    var sf = m.sizeFactor || 100;
+    return (m.aetherytes || []).map(function (a) { return TC.coordsToPercent({ x: a.x, y: a.y }, sf); });
+  }
+
   // 一個地圖區的大圖：該區所有點依清單順序連線 + 編號標記（走法一眼看完，不必逐列對縮圖）
   function makeZoneMap(mid, pts) {
     var m = DATA.maps[mid] || {}, sf = m.sizeFactor || 100;
@@ -297,6 +303,7 @@
       .filter(function (o) { return o.q.map === mid; });
     return RMAP.render({
       image: m.image,
+      aetherytes: aethPct(m),
       points: zone.map(function (o) {
         return {
           pct: TC.coordsToPercent({ x: o.q.x, y: o.q.y }, sf),
@@ -320,6 +327,7 @@
       title: zoneName(r.map),
       image: m.image,
       markers: markers,
+      aetherytes: aethPct(m),
       coordText: '第 ' + (markers.filter(function (k) { return k.active; })[0] || {}).label + ' 點 · X:' + r.x + ' Y:' + r.y + (r.done ? ' ✓ 已完成' : ''),
       onCopy: function () { copyCoords({ zone: zoneName(r.map) }, r); },
     });

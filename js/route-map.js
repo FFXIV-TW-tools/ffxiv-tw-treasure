@@ -6,7 +6,7 @@
   'use strict';
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
-  // opts: {image, points:[{pct:{x,y}, label, done, mine}], onPick(i)}
+  // opts: {image, points:[{pct:{x,y}, label, done, mine}], aetherytes:[{x,y}(百分比)], onPick(i)}
   function render(opts) {
     opts = opts || {};
     var pts = opts.points || [];
@@ -23,6 +23,14 @@
       line.setAttribute('points', pts.map(function (p) { return p.pct.x + ',' + p.pct.y; }).join(' '));
       svg.appendChild(line); wrap.appendChild(svg);
     }
+
+    // 傳送水晶（先畫→墊在挖掘點標記下層）：讓人看得出這區該傳哪一顆過去。無名稱（無台服正名權威源）。
+    (opts.aetherytes || []).forEach(function (a) {
+      var s = document.createElement('span'); s.className = 'tre-routemap__aeth'; s.setAttribute('aria-hidden', 'true');
+      s.style.left = a.x + '%'; s.style.top = a.y + '%';
+      s.title = '傳送水晶';
+      wrap.appendChild(s);
+    });
 
     pts.forEach(function (p, i) {
       var b = document.createElement('button'); b.type = 'button';

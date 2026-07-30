@@ -1,5 +1,6 @@
 # Teamcraft 抓取快取（可由 tools/build-data.py 重生；生成的 grades/maps/treasures.json 才 commit）
 data/_teamcraft-treasures.json
+data/_teamcraft-aetherytes.json
 
 # Python
 __pycache__/

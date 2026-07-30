@@ -60,7 +60,7 @@
 
   // 挖掘點放大檢視：整張地圖 + 該區所有點的編號標記（共享路線縮圖太小看不出位置 → 點縮圖開這個）。
   // 標記沿用 step3 全圖的 .tre-fullmap__marker 樣式（同一套視覺語彙），被點的那顆 is-active 放大。
-  // opts: {title, image, markers:[{pct:{x,y}, label, active}], coordText, onCopy}
+  // opts: {title, image, markers:[{pct:{x,y}, label, active}], aetherytes:[{x,y}(百分比)], coordText, onCopy}
   function mapView(opts) {
     opts = opts || {};
     var closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.className = 'codex-btn codex-btn--ghost'; closeBtn.textContent = '關閉';
@@ -70,6 +70,11 @@
         var wrap = document.createElement('div'); wrap.className = 'tre-mapview';
         if (opts.image) {
           wrap.style.backgroundImage = 'url("' + opts.image + '")';
+          (opts.aetherytes || []).forEach(function (a) {
+            var t = document.createElement('span'); t.className = 'tre-routemap__aeth'; t.setAttribute('aria-hidden', 'true');
+            t.style.left = a.x + '%'; t.style.top = a.y + '%'; t.title = '傳送水晶';
+            wrap.appendChild(t);
+          });
           (opts.markers || []).forEach(function (mk) {
             var s = document.createElement('span');
             s.className = 'tre-fullmap__marker' + (mk.active ? ' is-active' : '');

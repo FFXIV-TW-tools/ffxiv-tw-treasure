@@ -34,6 +34,16 @@ for (const [mid, m] of Object.entries(maps)) {
   assert.ok(!/["'()\s]/.test(m.image), `map ${mid} image 不得含 url() 破壞字元：${m.image}`);
 }
 
+// ── 2b. 每張圖都有傳送水晶座標且在合理範圍 ──
+// 回歸守門：2026-07-30 曾想只取 Teamcraft type 0，實測 map 213（龍堡內陸低地）只有 type 1 的
+// 兩顆聚落水晶（泰勒斐爾／阿涅斯特里恩，遊戲可傳）→ 過濾掉會讓該圖一顆不剩。
+for (const [mid, m] of Object.entries(maps)) {
+  assert.ok(Array.isArray(m.aetherytes) && m.aetherytes.length > 0, `map ${mid} 必須有傳送水晶座標`);
+  for (const a of m.aetherytes) {
+    assert.ok(a.x > 0 && a.x < 50 && a.y > 0 && a.y < 50, `map ${mid} 水晶座標超出合理範圍：${a.x},${a.y}`);
+  }
+}
+
 // ── 3. 無死 .tre-* CSS（styles.css 定義的每個都要有人用）──
 // token 邊界比對（非子字串）：class 名前後不得緊接 class 字元 [a-z0-9_-]，
 // 否則父類 `tre-dig` 會被子類 `tre-dig__map` 的子字串「誤判為已使用」→ 真死父類漏抓。

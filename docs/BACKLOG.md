@@ -8,7 +8,7 @@
 
 - [ ] **B-001** (P3, perf)【建議 低｜延遲風險 低｜執行風險 中｜副作用 動即時廣播的渲染路徑（組隊同步時序）】 route-list 就地 diff 取代整清單重建 — `js/app.js` `renderRoute` 每次廣播整份重畫 → 活躍組隊時 checkbox 閃動 / 焦點丟失。依 key 就地 diff。ROI 低、留觀察，回報卡頓再議。來源: 健檢 2026-07-04 建議（延續）
 - [ ] **B-002** (P3, quality)【建議 低｜延遲風險 低｜執行風險 低｜副作用 無（2 處色值，低視覺風險）】 styles.css 2 處裸色值改 `var(--token, fallback)` — `.tre-dig__co` 的 `color:#fff`（styles.css:201）、grade badge 的 `background:rgba(230,192,104,.12)`（styles.css:102）未走全站 token+fallback 模式（其餘 40+ 處已守）。低視覺風險、下次接觸 styles.css 順手改。來源: delta 稽核 2026-07-11
-- [ ] **B-004** (P3, quality)【建議 低｜延遲風險 低｜執行風險 低｜副作用 無（只動 worker 測試導出方式，協定不變）】 `wrangler dev` 起不來 — `worker/src/index.js:270` 為測試導出的 `MAX_CONN`（number）被 workerd 拒收「Incorrect type for map entry 'MAX_CONN': not of type 'function or ExportedHandler'」→ 本地無法端到端 smoke 真房間（只能靠 worker.test.mjs + 線上）。修法：常數改由測試從原始碼推導、或改導出取值函式。正式 deploy 不受影響。來源: 2026-07-30 顯示名輪 smoke 實踩
+- [x] **B-004** (P3, quality)【建議 低｜延遲風險 低｜執行風險 低｜副作用 無（只動 worker 測試導出方式，協定不變）】 `wrangler dev` 起不來 — `worker/src/index.js:270` 為測試導出的 `MAX_CONN`（number）被 workerd 拒收「Incorrect type for map entry 'MAX_CONN': not of type 'function or ExportedHandler'」→ 本地無法端到端 smoke 真房間（只能靠 worker.test.mjs + 線上）。修法：常數改由測試從原始碼推導、或改導出取值函式。正式 deploy 不受影響。來源: 2026-07-30 顯示名輪 smoke 實踩 ✓ 完成於 cycle 2026-07-30-aetheryte-on-map
 - [ ] **B-005** (P3, feature)【建議 低｜延遲風險 低｜執行風險 中｜副作用 動 DO applyOp 協定＋需 worker deploy】 改名回溯既有點（DO `rename` op）— 顯示名是加點當下快照進每個點，改名只影響之後加的點。要全隊看到一致名稱需 DO 依 owner 批次改 ownerName 並廣播。Owner 2026-07-30 判本輪不做（多數人一進房就設好名字）；若回報「改名後舊點還是舊名很困惑」再議。來源: 2026-07-30 顯示名輪（Owner 選純前端範圍）
 - [ ] **B-003** (P3, a11y)【建議 低｜延遲風險 低｜執行風險 低｜副作用 動挖掘卡視覺資產（換圖／降解析度會改觀感）】 挖掘卡 2048² 背景層行動端記憶體 — 大圖背景層在低階手機峰值記憶體偏高（~推測值、未實測）。觀察項，回報卡頓/崩頁再議。來源: 健檢 2026-07-04 建議（延續）
 
