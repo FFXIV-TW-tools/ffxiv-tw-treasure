@@ -336,15 +336,20 @@
     el['route-empty'].hidden = pts.length > 0;
     el['route-list'].textContent = '';
     if (!pts.length) { el['route-stat'].hidden = true; return; }
-    var curMap = null, zoneEl = null;
+    var curMap = null, listEl = null;
     pts.forEach(function (r, i) {
       if (r.map !== curMap) {
-        curMap = r.map; zoneEl = document.createElement('div'); zoneEl.className = 'tre-route-zone';
+        curMap = r.map;
+        var zoneEl = document.createElement('div'); zoneEl.className = 'tre-route-zone';
         var head = document.createElement('div'); head.className = 'tre-route-zone__head';
         var zn = document.createElement('span'); zn.textContent = zoneName(r.map);
         var zc = document.createElement('span'); zc.className = 'codex-small'; zc.textContent = pts.filter(function (x) { return x.map === r.map; }).length + ' 點';
         head.appendChild(zn); head.appendChild(zc); zoneEl.appendChild(head); el['route-list'].appendChild(zoneEl);
-        zoneEl.appendChild(makeZoneMap(r.map, pts));   // 該區一張大圖：順序線 + 編號標記（清單縮圖的替代）
+        // 左清單／右大圖並排（大圖獨佔一整列太空；並排後同一區的點與位置一眼對照）
+        var body = document.createElement('div'); body.className = 'tre-route-zone__body';
+        listEl = document.createElement('div'); listEl.className = 'tre-route-zone__items';
+        body.appendChild(listEl); body.appendChild(makeZoneMap(r.map, pts));
+        zoneEl.appendChild(body);
       }
       var mine = !!(ROOM && r.owner === ROOM.owner());
       var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '') + (mine ? ' is-mine' : '');
@@ -368,7 +373,7 @@
         });
       });
       item.appendChild(num); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
-      zoneEl.appendChild(item);
+      listEl.appendChild(item);
     });
   }
 

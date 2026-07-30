@@ -27,7 +27,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **`improve2Opt`（2-opt）是閉環假設**（尾端 `(k+1)%length` 幻邊）：本工具是**開放路徑**（`calcTotalDistance` 只累加 n-1 段）。目前 `use2Opt` 預設關、無產品呼叫者；啟用前先修尾端幻邊，且測試用**固定 golden `deepEqual`**釘行為，**勿用**「≤ 非2opt」單調斷言（開放路徑下會 flaky）。
 - **繁中至上 / 繁中名走本地權威源**：物品名 = `item_lookup.name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用「地圖Gxx」錯名）；地名 = `place_names.json`（map-id keyed）。**禁自建對照表**。座標公式 = FFXIV 官方 datamining；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
 - **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler（CSP friendly）— 維持此姿態，勿引入 `innerHTML`。
-- **檔案 ≤ 500 行（新檔）/ 遇授權牆不靜默跳過**：目前最大 `app.js` 492 行（**下次實質接觸必須先拆**：候選＝把「共享路線面板」渲染抽成獨立檔）（2026-07-30 逼近門檻時把對話框職責抽成 `js/app-modal.js`、區域路線大圖抽成 `js/route-map.js`；再逼近 500 就繼續按職責分層，勿硬塞），其餘各檔偏小；維持職責清楚。
+- **檔案 ≤ 500 行（新檔）/ 遇授權牆不靜默跳過**：目前最大 `app.js` 497 行（**下次實質接觸必須先拆**：候選＝把「共享路線面板」渲染抽成獨立檔）（2026-07-30 逼近門檻時把對話框職責抽成 `js/app-modal.js`、區域路線大圖抽成 `js/route-map.js`；再逼近 500 就繼續按職責分層，勿硬塞），其餘各檔偏小；維持職責清楚。
 
 ---
 
@@ -65,7 +65,7 @@ cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 
 | `index.html` | shell（portal CDN document.write 注入 header/tokens）+ 三步精靈 DOM |
 | `styles.css` | 工具樣式（用 portal codex token/元件；色值走 `var(--token, fallback)`）|
 | `js/treasure-core.js` | 純函式（UMD）：座標換算 `(coord-1)*SizeFactor/40.96` + 路線優化（map 分組 greedy 最近鄰 + optional 2-opt）+ 遊戲內座標寫法 `formatGameCoord`|
-| `js/app.js` | 三步狀態機 + 裁切卡/全圖渲染 + 房間 UI（含「我的名稱」）+ 共享路線面板（最大檔 492 行，逼近 500）|
+| `js/app.js` | 三步狀態機 + 裁切卡/全圖渲染 + 房間 UI（含「我的名稱」）+ 共享路線面板（最大檔 497 行，逼近 500）|
 | `js/app-modal.js` | 對話框元件（codex-modal）：`confirm` 破壞性操作確認 + `mapView` 挖掘點放大檢視（全圖 + 同區編號標記） |
 | `js/route-map.js` | 區域路線大圖渲染器（純渲染、不碰房間狀態）：SVG 順序線 + 編號標記（done/mine 態）|
 | `js/room.js` | 多人房間 client（WebSocket、op-based、自動重連 backoff、6h 自動重連）— 基於 mit-planner `app-room.js` 改 |

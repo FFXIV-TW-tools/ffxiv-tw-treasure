@@ -12,9 +12,10 @@
 - **「複製整條」改成「複製成巨集」**：輸出每行 `/p 庫爾札斯西部高地 ( 21.0 , 14.0 )`（已完成標 ✓），貼進遊戲巨集欄按一下就把整條路線喊給隊友；超過 15 行（巨集上限）toast 提醒分兩個巨集。**為什麼**：原格式「`【區名】` 分段 + `1. ( 21 , 14 )`」每行缺地名、也不是能直接執行的東西，貼進遊戲沒用。
   - **查證留痕（Owner 提「直接給巨集指令」時做的）**：遊戲**原生沒有**用任意座標插旗的指令——`/waymark`(`/wmark`) 只放戰鬥場地標記 ABC/1234 且不吃座標（[Lodestone 文字指令](https://na.finalfantasyxiv.com/lodestone/playguide/db/text_command/82038e3fa9c/)）；能產生可點地圖連結的 `<flag>`（地圖 Ctrl+右鍵手插旗）與 `<pos>`（自身位置）讀的都是當下狀態，無法由工具端指定座標（[Lodestone UI 指南](https://na.finalfantasyxiv.com/uiguide/communication/communication-chat/chat_flag.html)）；`/coord x y : 地名` 是 **ChatCoordinates 插件**指令、非原生。→ Owner 拍板走原生 `/p` 文字版。
   - 格式化抽成 `TC.formatGameCoord`（純函式，3 個 assert 釘住「地名 + 一位小數」形狀）；單點複製共用同一函式，兩處不再各寫一份。
+- **一區＝左清單／右大圖並排**（`tre-route-zone__body` grid，窄螢幕 ≤720px 退回上下堆疊）：大圖原本獨佔一整列、下面再接清單，垂直空間浪費且要上下來回看；並排後編號與位置一眼對照（Owner 2026-07-30）。
 - **移除清單列縮圖**（`.tre-route-item__thumb/__thumbpin`）：區域大圖已完整取代其功能，留著等於同一資訊畫兩次、列高還被撐大。
 ### Verified
-- `npm test` 4 套全綠 **78 → 81 assert**（只升）。
+- `npm test` 4 套全綠 **78 → 81 assert**（只升）。版面以真地圖資料在頁面上組出同結構驗過（截圖：左清單 3 列／右大圖 3 標記，已完成列刪除線、自己的列 accent 條）。
 - 瀏覽器 smoke：`TreasureRouteMap.render` 實測 4 點 → 4 標記 + 順序 polyline，已完成 1 顆灰化、自己的 2 顆金框（截圖確認）；`formatGameCoord` 頁面實跑回 `庫爾札斯西部高地 ( 21.0 , 14.0 )`，巨集行組合實跑 `/p 紅玉海 ( 8.5 , 30.3 ) ✓`；按鈕文案已更新、零 console error。
 - ⚠️ **未驗**：真房間端到端（同前段，本地 `wrangler dev` 起不來＝B-004）；渲染器與格式化皆已在頁面上以真資料直接驗過。
 

@@ -223,7 +223,11 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   font-weight: var(--fw-semibold, 600); color: var(--accent);
   display: flex; justify-content: space-between; gap: var(--space-2);
 }
-.tre-route-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border, #2b3f56); }
+/* 一區＝左清單／右大圖並排（大圖獨佔整列太浪費垂直空間）；窄螢幕退回上下堆疊 */
+.tre-route-zone__body { display: grid; grid-template-columns: 1fr minmax(220px, 320px); gap: var(--space-3); padding: var(--space-3); align-items: start; }
+.tre-route-zone__items { display: flex; flex-direction: column; min-width: 0; }
+.tre-route-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border, #2b3f56); }
+.tre-route-item:last-child { border-bottom: 0; }
 .tre-route-item.is-done { opacity: .55; }
 .tre-route-item.is-done .tre-route-item__co { text-decoration: line-through; }
 /* #2：高亮「自己加的」點（兩人同圖時一眼分出哪些是我的）；順序仍依建議排序 */
@@ -235,7 +239,7 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 .tre-route-item__btn:hover { border-color: var(--accent); color: var(--accent); }
 /* 區域路線大圖：該區所有點依清單順序連線 + 編號標記（取代逐列小縮圖，走法一眼看完）*/
 .tre-routemap {
-  position: relative; width: min(100%, 420px); aspect-ratio: 1 / 1; margin: var(--space-3) auto;
+  position: relative; width: 100%; aspect-ratio: 1 / 1; align-self: start;
   border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
   background-color: var(--color-bg, #080c13);
   background-repeat: no-repeat; background-position: center; background-size: contain;
@@ -295,6 +299,7 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 
 /* ── 響應式：窄螢幕側欄堆到下方 ── */
 @media (max-width: 720px) {
+  .tre-route-zone__body { grid-template-columns: 1fr; }   /* 手機：地圖與清單改上下堆疊 */
   .tre-treasure-layout { grid-template-columns: 1fr; }
   .tre-sidemap { position: static; order: -1; }   /* 手機把全圖放上面 */
   .tre-grid--dig { justify-content: center; }     /* 手機單欄置中，不靠左留大空白 */
