@@ -233,24 +233,22 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 .tre-route-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 .tre-route-item__btn { background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5); border-radius: var(--radius-sm, 6px); cursor: pointer; font-family: inherit; font-size: var(--fs-small, 0.8125rem); padding: 2px 8px; }
 .tre-route-item__btn:hover { border-color: var(--accent); color: var(--accent); }
-/* #1：共享路線每點縮圖＝整張小地圖（contain）+ pin 標位置（比裁切塊好認） */
-.tre-route-item__thumb {
-  position: relative; flex: 0 0 auto;
-  width: 84px; height: 84px; overflow: hidden; padding: 0; cursor: pointer;
+/* 區域路線大圖：該區所有點依清單順序連線 + 編號標記（取代逐列小縮圖，走法一眼看完）*/
+.tre-routemap {
+  position: relative; width: min(100%, 420px); aspect-ratio: 1 / 1; margin: var(--space-3) auto;
   border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
   background-color: var(--color-bg, #080c13);
   background-repeat: no-repeat; background-position: center; background-size: contain;
 }
-.tre-route-item__thumb:hover, .tre-route-item__thumb:focus-visible { border-color: var(--accent); }
-/* 縮圖 pin 帶清單序號（與放大檢視／清單序號同一組編號）*/
-.tre-route-item__thumbpin {
-  position: absolute; transform: translate(-50%, -50%);
-  min-width: 16px; height: 16px; padding: 0 2px; pointer-events: none;
-  background: var(--accent); color: var(--color-bg, #080c13);
-  border: 1px solid var(--color-bg, #080c13); border-radius: var(--radius-pill, 999px);
-  font-size: 10px; font-weight: var(--fw-bold, 700); line-height: 14px; text-align: center;
-  box-shadow: 0 0 6px var(--accent);
+.tre-routemap__lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tre-routemap__lines polyline {
+  fill: none; stroke: var(--accent); stroke-width: .7; stroke-dasharray: 2 1.6;
+  stroke-linejoin: round; opacity: .8; vector-effect: non-scaling-stroke;
 }
+/* 標記沿用 step3 全圖語彙；已完成淡出、自己加的補金框（與清單列的 is-done / is-mine 對應）*/
+.tre-routemap .tre-fullmap__marker { min-width: 22px; height: 22px; line-height: 20px; font-size: var(--fs-small, 0.8125rem); }
+.tre-routemap .tre-fullmap__marker.is-done { opacity: .45; background: var(--color-text-muted, #c0c9da); }
+.tre-routemap .tre-fullmap__marker.is-mine { box-shadow: 0 0 0 2px var(--color-accent-gold, #e6c068); }
 
 /* ── 多人房間 bar ── */
 .tre-roombar { padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4); }

@@ -162,8 +162,15 @@
     return { totalDistance: calcTotalDistance(treasures), mapCount: maps.size, mapJumps: jumps };
   }
 
+  // 遊戲內座標寫法：「地名 ( 21.0 , 14.0 )」— 遊戲與 Dalamud 插件（ChatCoordinates 等）辨識的是
+  // 「地名 + 括號一位小數」這個形狀；缺地名或缺小數點的寫法貼進聊天欄不會被認出來。
+  function formatGameCoord(zone, p) {
+    return (zone || '') + ' ( ' + Number(p.x).toFixed(1) + ' , ' + Number(p.y).toFixed(1) + ' )';
+  }
+
   return {
     coordsToPercent: coordsToPercent,
+    formatGameCoord: formatGameCoord,
     calcCardOffset: calcCardOffset,
     optimize: optimize,
     analyzeRoute: analyzeRoute,

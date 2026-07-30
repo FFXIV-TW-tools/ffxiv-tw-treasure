@@ -6,6 +6,7 @@
   var TC = window.TreasureCore;
   var ROOM = window.TreasureRoom;       // room.js（可能未載入 → 房間功能停用，查詢仍可用）
   var MODAL = window.TreasureModal;     // app-modal.js（confirm / 放大檢視）
+  var RMAP = window.TreasureRouteMap;   // route-map.js（區域路線大圖渲染器）
   var DIG_W = 208, DIG_H = 180;          // ⚠ 必須與 styles.css --dig-w/--dig-h 同值
 
   var DATA = { grades: [], maps: {}, byItem: {} };
@@ -24,7 +25,10 @@
   function badge(text, v) { var s = document.createElement('span'); s.className = 'codex-badge' + (v ? ' codex-badge--' + v : ''); s.textContent = text; return s; }
   function zoneName(mid) { var m = DATA.maps[mid]; return (m && m.zone) || ('地圖 ' + mid); }
   function copyText(t) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }) : Promise.resolve(false); }
-  function copyCoords(m, p) { var t = ((m && m.zone) || '') + ' ( ' + p.x + ' , ' + p.y + ' )'; copyText(t).then(function (ok) { toast(ok ? '已複製：' + t : t, ok ? 'ok' : 'warn'); }); }
+  // 整條複製的每行也自帶地名（原本只有「1. ( 21 , 14 )」缺地名，貼進遊戲沒人看得懂在哪張圖）。
+  // 格式化本體在 treasure-core（純函式、有測試）。
+  function gameCoord(zone, p) { return TC.formatGameCoord(zone, p); }
+  function copyCoords(m, p) { var t = gameCoord((m && m.zone) || '', p); copyText(t).then(function (ok) { toast(ok ? '已複製：' + t : t, ok ? 'ok' : 'warn'); }); }
 
   // 對話框走 app-modal.js（codex-modal 設計系統）；未載入時 confirm 一律回 false（不誤觸破壞性操作）。
   function confirmModal(opts) { return MODAL ? MODAL.confirm(opts) : Promise.resolve(false); }
@@ -286,23 +290,21 @@
     }
   }
 
-  // 共享路線每點的縮圖：整張小地圖（contain）+ pin 標出該點位置 → 看得出在哪一區的哪裡（比裁切塊好認）
-  // 縮圖太小看不清 → 點一下開放大檢視（button 而非 div，鍵盤 Tab/Enter 也開得了）
-  function makeRouteThumb(r, no) {
-    var m = DATA.maps[r.map] || {};
-    var wrap = document.createElement('button'); wrap.type = 'button'; wrap.className = 'tre-route-item__thumb';
-    wrap.setAttribute('aria-label', '放大檢視 ' + zoneName(r.map) + ' X:' + r.x + ' Y:' + r.y);
-    wrap.title = '點一下看大圖';
-    wrap.addEventListener('click', function () { openMapView(r); });
-    if (m.image) {
-      wrap.style.backgroundImage = 'url("' + m.image + '")';
-      var pct = TC.coordsToPercent({ x: r.x, y: r.y }, m.sizeFactor || 100);
-      // pin 帶清單序號 → 縮圖／放大圖／清單三者編號一致，不點開也知道這顆是第幾點
-      var pin = document.createElement('span'); pin.className = 'tre-route-item__thumbpin'; pin.setAttribute('aria-hidden', 'true');
-      pin.style.left = pct.x + '%'; pin.style.top = pct.y + '%'; pin.textContent = String(no);
-      wrap.appendChild(pin);
-    }
-    return wrap;
+  // 一個地圖區的大圖：該區所有點依清單順序連線 + 編號標記（走法一眼看完，不必逐列對縮圖）
+  function makeZoneMap(mid, pts) {
+    var m = DATA.maps[mid] || {}, sf = m.sizeFactor || 100;
+    var zone = pts.map(function (q, idx) { return { q: q, no: idx + 1 }; })
+      .filter(function (o) { return o.q.map === mid; });
+    return RMAP.render({
+      image: m.image,
+      points: zone.map(function (o) {
+        return {
+          pct: TC.coordsToPercent({ x: o.q.x, y: o.q.y }, sf),
+          label: String(o.no), done: !!o.q.done, mine: !!(ROOM && o.q.owner === ROOM.owner()),
+        };
+      }),
+      onPick: function (i) { openMapView(zone[i].q); },
+    });
   }
 
   function openMapView(r) {
@@ -342,11 +344,11 @@
         var zn = document.createElement('span'); zn.textContent = zoneName(r.map);
         var zc = document.createElement('span'); zc.className = 'codex-small'; zc.textContent = pts.filter(function (x) { return x.map === r.map; }).length + ' 點';
         head.appendChild(zn); head.appendChild(zc); zoneEl.appendChild(head); el['route-list'].appendChild(zoneEl);
+        zoneEl.appendChild(makeZoneMap(r.map, pts));   // 該區一張大圖：順序線 + 編號標記（清單縮圖的替代）
       }
       var mine = !!(ROOM && r.owner === ROOM.owner());
       var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '') + (mine ? ' is-mine' : '');
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
-      var thumb = makeRouteThumb(r, i + 1);
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', '標記完成');
       chk.addEventListener('change', function () {
         if (!ensureConnected()) { chk.checked = !chk.checked; return; }   // 未連上→還原勾選（op 未送出）
@@ -365,7 +367,7 @@
           if (yes) ROOM.removePoint(r.key);
         });
       });
-      item.appendChild(num); item.appendChild(thumb); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
+      item.appendChild(num); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
       zoneEl.appendChild(item);
     });
   }
@@ -412,8 +414,10 @@
   }
   function copyRoom() {
     var pts = shared.points || []; if (!pts.length) { toast('清單是空的', 'warn'); return; }
-    var lines = [], cur = null;
-    pts.forEach(function (r, i) { if (r.map !== cur) { cur = r.map; lines.push('【' + zoneName(r.map) + '】'); } lines.push((i + 1) + '. ( ' + r.x + ' , ' + r.y + ' )' + (r.done ? ' ✓' : '')); });
+    // 每行＝可直接貼進遊戲聊天的完整座標（含地名），不再分區塊標題 → 逐行貼、逐行都看得懂
+    var lines = pts.map(function (r, i) {
+      return (i + 1) + '. ' + gameCoord(zoneName(r.map), r) + (r.done ? ' ✓' : '');
+    });
     copyText(lines.join('\n')).then(function (ok) { toast(ok ? '已複製整條（' + pts.length + ' 點）' : '複製失敗', ok ? 'ok' : 'error'); });
   }
 

@@ -66,4 +66,9 @@ const zig = [
 assert.deepEqual(TC.optimize(zig, { use2Opt: false }).map((t) => t.id), ['a', 'c', 'e', 'd', 'b', 'f'], '2-opt 關：greedy NN 順序');
 assert.deepEqual(TC.optimize(zig, { use2Opt: true }).map((t) => t.id), ['a', 'c', 'e', 'f', 'd', 'b'], '2-opt 開：改善交叉後順序（golden）');
 
+// ── formatGameCoord：遊戲內可用寫法「地名 ( 21.0 , 14.0 )」（地名 + 一位小數才被遊戲/插件認出）──
+assert.equal(TC.formatGameCoord('庫爾札斯西部高地', { x: 21, y: 14 }), '庫爾札斯西部高地 ( 21.0 , 14.0 )', '整數補一位小數');
+assert.equal(TC.formatGameCoord('紅玉海', { x: 8.5, y: 30.25 }), '紅玉海 ( 8.5 , 30.3 )', '小數四捨五入到一位');
+assert.equal(TC.formatGameCoord('', { x: 1, y: 2 }), ' ( 1.0 , 2.0 )', '無地名不炸（仍給座標）');
+
 console.log('treasure-core: all assertions passed');

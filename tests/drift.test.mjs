@@ -13,6 +13,7 @@ const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
 const appJs = read('js/app.js');
 const modalJs = read('js/app-modal.js');
+const rmapJs = read('js/route-map.js');
 const roomJs = read('js/room.js');
 const css = read('styles.css');
 const html = read('index.html');
@@ -36,7 +37,7 @@ for (const [mid, m] of Object.entries(maps)) {
 // ── 3. 無死 .tre-* CSS（styles.css 定義的每個都要有人用）──
 // token 邊界比對（非子字串）：class 名前後不得緊接 class 字元 [a-z0-9_-]，
 // 否則父類 `tre-dig` 會被子類 `tre-dig__map` 的子字串「誤判為已使用」→ 真死父類漏抓。
-const src = appJs + modalJs + roomJs + html;
+const src = appJs + modalJs + rmapJs + roomJs + html;
 const defined = new Set([...css.matchAll(/\.(tre-[a-z0-9_-]+)/gi)].map((m) => m[1]));
 const usedAsToken = (cls) => new RegExp('(?<![a-z0-9_-])' + cls + '(?![a-z0-9_-])').test(src);
 const dead = [...defined].filter((cls) => !usedAsToken(cls));
