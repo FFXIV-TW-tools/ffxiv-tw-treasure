@@ -5,6 +5,7 @@
   'use strict';
   var TC = window.TreasureCore;
   var ROOM = window.TreasureRoom;       // room.js（可能未載入 → 房間功能停用，查詢仍可用）
+  var MODAL = window.TreasureModal;     // app-modal.js（confirm / 放大檢視）
   var DIG_W = 208, DIG_H = 180;          // ⚠ 必須與 styles.css --dig-w/--dig-h 同值
 
   var DATA = { grades: [], maps: {}, byItem: {} };
@@ -25,45 +26,8 @@
   function copyText(t) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }) : Promise.resolve(false); }
   function copyCoords(m, p) { var t = ((m && m.zone) || '') + ' ( ' + p.x + ' , ' + p.y + ' )'; copyText(t).then(function (ok) { toast(ok ? '已複製：' + t : t, ok ? 'ok' : 'warn'); }); }
 
-  // 依 portal codex-modal 設計系統的確認框（取代原生 confirm）。回傳 Promise<boolean>（確定=true）。
-  // 全程 createElement/textContent（無 innerHTML，CSP friendly）；焦點鎖/還原走 window.FFXIVA11y.trapFocus（fallback no-op）。
-  // 設計系統要求：ESC + overlay 點擊關閉（見 _DESIGN-SYSTEM §codex-modal）。
-  function confirmModal(opts) {
-    opts = opts || {};
-    return new Promise(function (resolve) {
-      var overlay = document.createElement('div'); overlay.className = 'codex-modal-overlay';
-      var modal = document.createElement('div'); modal.className = 'codex-modal'; modal.style.maxWidth = '440px';
-      modal.setAttribute('role', 'alertdialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', 'tre-confirm-title');
-      var head = document.createElement('div'); head.className = 'codex-modal__header';
-      var h = document.createElement('h3'); h.className = 'codex-h3'; h.id = 'tre-confirm-title'; h.style.margin = '0'; h.textContent = opts.title || '確認';
-      var x = document.createElement('button'); x.type = 'button'; x.className = 'codex-modal__close'; x.textContent = '×'; x.setAttribute('aria-label', '關閉');
-      head.appendChild(h); head.appendChild(x);
-      var body = document.createElement('div'); body.className = 'codex-modal__body';
-      var p = document.createElement('p'); p.className = 'codex-body'; p.style.margin = '0'; p.textContent = opts.message || '';
-      body.appendChild(p);
-      var foot = document.createElement('div'); foot.className = 'codex-modal__footer';
-      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'codex-btn codex-btn--ghost'; cancel.textContent = opts.cancelText || '取消';
-      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'codex-btn codex-btn--' + (opts.danger ? 'danger' : 'primary'); ok.textContent = opts.confirmText || '確定';
-      foot.appendChild(cancel); foot.appendChild(ok);
-      modal.appendChild(head); modal.appendChild(body); modal.appendChild(foot);
-      overlay.appendChild(modal); document.body.appendChild(overlay);
-      var release = (window.FFXIVA11y && FFXIVA11y.trapFocus) ? FFXIVA11y.trapFocus(modal, { initial: ok }) : null;
-      var done = false;
-      function close(val) {
-        if (done) return; done = true;
-        document.removeEventListener('keydown', onKey, true);
-        if (release) release();
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-        resolve(val);
-      }
-      function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); close(false); } }
-      document.addEventListener('keydown', onKey, true);
-      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(false); });
-      x.addEventListener('click', function () { close(false); });
-      cancel.addEventListener('click', function () { close(false); });
-      ok.addEventListener('click', function () { close(true); });
-    });
-  }
+  // 對話框走 app-modal.js（codex-modal 設計系統）；未載入時 confirm 一律回 false（不誤觸破壞性操作）。
+  function confirmModal(opts) { return MODAL ? MODAL.confirm(opts) : Promise.resolve(false); }
 
   function setBreadcrumb(active) {
     document.querySelectorAll('.tre-step').forEach(function (b) {
@@ -253,9 +217,33 @@
   function roomBtn(text, fn, variant) {
     var b = document.createElement('button'); b.type = 'button'; b.className = 'codex-btn codex-btn--' + (variant || 'ghost'); b.textContent = text; b.addEventListener('click', fn); return b;
   }
+  // 「我的名稱」：寫回 portal 設定 character.name（跨工具共享身份，不另存一份）。
+  // 名稱是加點當下快照進 DO 每個點的 → 改名只影響之後加的點（提示寫在 hint，不假裝會回溯）。
+  function makeNameGroup() {
+    var g = document.createElement('div'); g.className = 'tre-roombar__group';
+    var lbl = document.createElement('span'); lbl.className = 'tre-roombar__grouplbl codex-small'; lbl.textContent = '我的名稱：'; g.appendChild(lbl);
+    var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-name-input';
+    inp.maxLength = 24; inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
+    inp.setAttribute('aria-label', '我在共享路線顯示的名稱');
+    inp.title = '隊友在共享路線上看到的名稱（改名只影響之後加的點）';
+    inp.addEventListener('change', function () {
+      var before = inp.value;
+      if (!ROOM.setName(inp.value)) { toast('名稱未能儲存（設定服務未載入）', 'error'); return; }
+      inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
+      if (inp.value) toast('顯示名稱已改為「' + inp.value + '」（之後加的點生效）', 'ok');
+      else if (before.trim()) toast('名稱已清空，改回預設「' + ROOM.ownerName() + '」', 'ok');
+    });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') inp.blur(); });
+    g.appendChild(inp);
+    return g;
+  }
   function renderRoomBar() {
     if (!el['room-bar']) return;
     if (!ROOM) { el['room-bar'].hidden = true; return; }
+    // 整條 bar 每次事件（隊友加點/上線數）都重畫 → 正在打字的名稱欄會被抹掉；先接住值與游標位置再還原。
+    var act = document.activeElement;
+    var keepName = (act && act.classList && act.classList.contains('tre-name-input'))
+      ? { v: act.value, s: act.selectionStart } : null;
     el['room-bar'].hidden = false; el['room-bar'].textContent = '';
     var hud = document.createElement('span'); hud.className = 'codex-hud'; hud.setAttribute('aria-hidden', 'true'); el['room-bar'].appendChild(hud);
     var row = document.createElement('div'); row.className = 'tre-roombar__row'; el['room-bar'].appendChild(row);
@@ -266,6 +254,7 @@
       row.appendChild(roomBtn('🔗 邀請連結', function () { copyText(ROOM.inviteUrl()).then(function (ok) { toast(ok ? '已複製邀請連結' : '複製失敗', ok ? 'ok' : 'error'); }); }));
       var on = document.createElement('span'); on.className = 'tre-roombar__online codex-small';
       on.textContent = '👥 ' + (shared.online || 1) + ' 人' + (ROOM.isConnected() ? '' : '（連線中…）'); row.appendChild(on);
+      if (ROOM.canSetName()) row.appendChild(makeNameGroup());
       row.appendChild(roomBtn('離開', function () { ROOM.leave(); }));
     } else {
       // 建立（自動產碼）— 與「加入」明確分開
@@ -291,20 +280,47 @@
       }
       row.appendChild(joinG);
     }
+    if (keepName) {
+      var back = el['room-bar'].querySelector('.tre-name-input');
+      if (back) { back.value = keepName.v; back.focus(); try { back.setSelectionRange(keepName.s, keepName.s); } catch (_) {} }
+    }
   }
 
   // 共享路線每點的縮圖：整張小地圖（contain）+ pin 標出該點位置 → 看得出在哪一區的哪裡（比裁切塊好認）
-  function makeRouteThumb(r) {
+  // 縮圖太小看不清 → 點一下開放大檢視（button 而非 div，鍵盤 Tab/Enter 也開得了）
+  function makeRouteThumb(r, no) {
     var m = DATA.maps[r.map] || {};
-    var wrap = document.createElement('div'); wrap.className = 'tre-route-item__thumb';
+    var wrap = document.createElement('button'); wrap.type = 'button'; wrap.className = 'tre-route-item__thumb';
+    wrap.setAttribute('aria-label', '放大檢視 ' + zoneName(r.map) + ' X:' + r.x + ' Y:' + r.y);
+    wrap.title = '點一下看大圖';
+    wrap.addEventListener('click', function () { openMapView(r); });
     if (m.image) {
       wrap.style.backgroundImage = 'url("' + m.image + '")';
       var pct = TC.coordsToPercent({ x: r.x, y: r.y }, m.sizeFactor || 100);
+      // pin 帶清單序號 → 縮圖／放大圖／清單三者編號一致，不點開也知道這顆是第幾點
       var pin = document.createElement('span'); pin.className = 'tre-route-item__thumbpin'; pin.setAttribute('aria-hidden', 'true');
-      pin.style.left = pct.x + '%'; pin.style.top = pct.y + '%';
+      pin.style.left = pct.x + '%'; pin.style.top = pct.y + '%'; pin.textContent = String(no);
       wrap.appendChild(pin);
     }
     return wrap;
+  }
+
+  function openMapView(r) {
+    if (!MODAL) return;
+    var m = DATA.maps[r.map] || {}, sf = m.sizeFactor || 100;
+    // 同區的點一起畫上（編號＝共享清單序號）→ 看得出這點在路線裡的位置與鄰近點，比單一 pin 直觀
+    var markers = (shared.points || []).map(function (q, idx) { return { q: q, no: idx + 1 }; })
+      .filter(function (o) { return o.q.map === r.map; })
+      .map(function (o) {
+        return { pct: TC.coordsToPercent({ x: o.q.x, y: o.q.y }, sf), label: String(o.no), active: o.q.key === r.key };
+      });
+    MODAL.mapView({
+      title: zoneName(r.map),
+      image: m.image,
+      markers: markers,
+      coordText: '第 ' + (markers.filter(function (k) { return k.active; })[0] || {}).label + ' 點 · X:' + r.x + ' Y:' + r.y + (r.done ? ' ✓ 已完成' : ''),
+      onCopy: function () { copyCoords({ zone: zoneName(r.map) }, r); },
+    });
   }
 
   // ── 共享路線面板（只在房間內顯示）──
@@ -330,7 +346,7 @@
       var mine = !!(ROOM && r.owner === ROOM.owner());
       var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '') + (mine ? ' is-mine' : '');
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
-      var thumb = makeRouteThumb(r);
+      var thumb = makeRouteThumb(r, i + 1);
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', '標記完成');
       chk.addEventListener('change', function () {
         if (!ensureConnected()) { chk.checked = !chk.checked; return; }   // 未連上→還原勾選（op 未送出）

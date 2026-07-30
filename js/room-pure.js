@@ -23,5 +23,12 @@
     return (raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   }
 
-  return { backoffDelay: backoffDelay, sanitizeJoinCode: sanitizeJoinCode };
+  // 顯示名淨化：去頭尾空白 + 去控制字元（貼上換行/tab 不破版）+ 截 24 字（與 worker normalizePoint 的
+  // ownerName clamp 同上限；worker 是最後防線，這裡先在來源截，避免使用者看到「存進去卻被砍」）。
+  // 回傳 '' ＝視為未設定（呼叫端改用預設「玩家xxxx」）。
+  function sanitizeDisplayName(raw) {
+    return String(raw == null ? '' : raw).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 24);
+  }
+
+  return { backoffDelay: backoffDelay, sanitizeJoinCode: sanitizeJoinCode, sanitizeDisplayName: sanitizeDisplayName };
 });

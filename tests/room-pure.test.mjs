@@ -20,4 +20,11 @@ assert.equal(RP.sanitizeJoinCode('好QW12ER'), 'QW12ER', '去中文');
 assert.equal(RP.sanitizeJoinCode(null), '', 'null → 空字串');
 assert.equal(RP.sanitizeJoinCode(''), '', '空 → 空');
 
+// ── sanitizeDisplayName：去頭尾空白 / 控制字元 / 截 24 字（與 worker ownerName clamp 同上限）──
+assert.equal(RP.sanitizeDisplayName('  喵喵  '), '喵喵', '去頭尾空白');
+assert.equal(RP.sanitizeDisplayName('阿\n貓\t狗'), '阿 貓 狗', '換行/tab → 空白（不破版）');
+assert.equal(RP.sanitizeDisplayName('喵'.repeat(30)), '喵'.repeat(24), '超長截 24 字（同 worker clamp）');
+assert.equal(RP.sanitizeDisplayName('   '), '', '純空白 → 空（＝未設定，回預設名）');
+assert.equal(RP.sanitizeDisplayName(null), '', 'null → 空字串');
+
 console.log('room-pure: all assertions passed');

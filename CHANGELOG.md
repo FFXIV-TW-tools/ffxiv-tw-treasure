@@ -3,6 +3,19 @@
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
 
+## 2026-07-30 — 房間顯示名可手動改 ＋ 共享路線縮圖可放大
+> cycle `2026-07-30-room-display-name`（旁路：可逆前端改動，無資料模型/對外契約變更；worker 未動、不需 deploy）。
+### Added
+- **房間 bar 加「我的名稱」輸入框**（在房間內才顯示）：寫回 portal 設定 `character.name`（跨工具共享身份，**不另存本地第二份**），空白＝清除回預設「玩家xxxx」。**為什麼**：顯示名原本只能在 portal 齒輪設定裡改，工具內沒有任何入口 → 多數人整排都是「玩家3f7a／玩家c91d」，等於沒有名字，而名字會出現在共享清單每列、移除隊友點的確認框、「XX 加了 N 個挖掘點」toast。名稱是加點當下快照進 DO 每個點的 → **改名只影響之後加的點**（不假裝回溯，hint/toast 都寫明；要回溯得加 DO rename op，Owner 判本輪不做）。
+- **共享路線縮圖點擊放大**：84px 縮圖改 `button`（鍵盤可 Tab/Enter）→ 開 codex-modal 全圖 + **該區所有點的編號標記**（沿用 step3 全圖的 `.tre-fullmap__marker`，被點的那顆 `is-active` 金色放大）+ 座標 + 複製鈕；**縮圖上的 pin 也改成帶清單序號的號碼**（清單序號／縮圖 pin／放大圖標記＝同一組編號，不點開也知道是第幾點）。**為什麼**：縮圖太小看不出實際位置，等於要回上一步重找；標號版比單一 pin 直觀——看得出這點在路線裡的第幾站、鄰近還有哪些點（Owner 2026-07-30 指定）。
+- **測試**：`sanitizeDisplayName`（trim／控制字元→空白／截 24 字＝與 worker `ownerName` clamp 同上限／空白視為未設定）進 room-pure，基線 **73 → 78 assert**（只升）。
+### Changed
+- **抽 `js/app-modal.js`**（confirm + mapView）：app.js 加功能後會破 500 行門檻 → 依「單一職責」把對話框職責分出去（AGENTS 檔案大小鐵則），app.js 482 行、modal 98 行。`drift.test.mjs` 的死 CSS 掃描來源同步加入新檔（否則新 class 會被誤判為死 CSS）。
+### Verified
+- `npm test` 4 套全綠 78 assert（exit 0）。
+- 瀏覽器 smoke（127.0.0.1:8799 + portal CDN）：`setName` 真實 round-trip（含去換行／24 字截斷／清空回預設，測後已還原為未設定）；重繪保值——打字中觸發 renderRoomBar 後值/游標/焦點皆保留（原本會被整條 bar 重畫抹掉）；放大 modal 圖 + 座標完整可見無內捲軸、ESC 可關；零 console error。
+- ⚠️ **未驗**：真房間端到端（本地 `wrangler dev` 起不來——`worker/src/index.js:270` 為測試導出的 `MAX_CONN` 常數被 workerd 拒收「not of type 'function or ExportedHandler'」，**既有問題、非本輪造成**，未修）。前端改動不觸及 worker 協定。
+
 ## 2026-07-29 — 資料檔快取改即時 revalidate
 
 `/data/*` 由 `max-age=600` 改 `max-age=0` + `must-revalidate`（全站一致的 Owner 裁示）。**為什麼**：資料推上去後前端沒變，使用者無法分辨是「沒推成功」還是「快取還沒過期」，而這兩者的處置完全相反。頻寬不受影響——ETag 命中回 304，內容沒變不會重下載。

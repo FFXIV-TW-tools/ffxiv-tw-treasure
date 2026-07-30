@@ -236,15 +236,20 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 /* #1：共享路線每點縮圖＝整張小地圖（contain）+ pin 標位置（比裁切塊好認） */
 .tre-route-item__thumb {
   position: relative; flex: 0 0 auto;
-  width: 84px; height: 84px; overflow: hidden;
+  width: 84px; height: 84px; overflow: hidden; padding: 0; cursor: pointer;
   border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
   background-color: var(--color-bg, #080c13);
   background-repeat: no-repeat; background-position: center; background-size: contain;
 }
+.tre-route-item__thumb:hover, .tre-route-item__thumb:focus-visible { border-color: var(--accent); }
+/* 縮圖 pin 帶清單序號（與放大檢視／清單序號同一組編號）*/
 .tre-route-item__thumbpin {
   position: absolute; transform: translate(-50%, -50%);
-  width: 12px; height: 12px; border: 2px solid var(--accent); border-radius: var(--radius-pill, 999px);
-  box-shadow: 0 0 0 2px var(--color-bg, #080c13), 0 0 6px var(--accent); pointer-events: none;
+  min-width: 16px; height: 16px; padding: 0 2px; pointer-events: none;
+  background: var(--accent); color: var(--color-bg, #080c13);
+  border: 1px solid var(--color-bg, #080c13); border-radius: var(--radius-pill, 999px);
+  font-size: 10px; font-weight: var(--fw-bold, 700); line-height: 14px; text-align: center;
+  box-shadow: 0 0 6px var(--accent);
 }
 
 /* ── 多人房間 bar ── */
@@ -265,12 +270,28 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   width: 8em; text-transform: uppercase; letter-spacing: .12em;
   font-family: var(--font-mono, monospace);
 }
+.tre-name-input { width: 10em; }
 .tre-room-chip {
   background: transparent; border: 1px solid var(--color-border, #2b3f56); color: var(--color-text, #f5f5f5);
   border-radius: var(--radius-sm, 6px); padding: 2px 8px; font-family: var(--font-mono, monospace);
   cursor: pointer; font-size: var(--fs-small, .8125rem);
 }
 .tre-room-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* 放大檢視 modal：整張地圖 + pin（縮圖太小看不出實際位置）*/
+.tre-mapview {
+  /* 正方形以「高度」為上限（寬度跟著縮）→ 圖 + 座標行一起塞進 modal body，不出現內捲軸 */
+  position: relative; width: min(100%, 56vh); aspect-ratio: 1 / 1; margin: 0 auto;
+  border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px);
+  background-color: var(--color-bg, #080c13);
+  background-repeat: no-repeat; background-position: center; background-size: contain;
+}
+/* 放大檢視的標記沿用全圖樣式，但這裡不可點（純檢視）→ 蓋掉 cursor 與尺寸放大一級 */
+.tre-mapview .tre-fullmap__marker { cursor: default; min-width: 22px; height: 22px; line-height: 20px; font-size: var(--fs-small, .8125rem); }
+.tre-mapview__co {
+  margin: var(--space-2) 0 0; text-align: center;
+  font-family: var(--font-mono, monospace); color: var(--accent);
+}
+
 /* 共享路線項目的擁有者標籤 */
 .tre-route-item__owner { color: var(--color-text-muted, #c0c9da); font-size: var(--fs-xs, .75rem); }
 

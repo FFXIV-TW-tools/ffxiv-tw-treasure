@@ -32,9 +32,24 @@
     }
     return v;
   }
-  function ownerName() {
-    try { if (window.FFXIVSettings && FFXIVSettings.get) { var n = FFXIVSettings.get('character.name'); if (n) return String(n).slice(0, 24); } } catch (_) {}
-    return '玩家' + owner().slice(0, 4);
+  // 顯示名唯一事實源＝portal 設定 character.name（跨工具共享身份，不另存本地一份）。
+  // customName() 回 '' 表示使用者未設定 → ownerName() 退回「玩家xxxx」。
+  function customName() {
+    try { if (window.FFXIVSettings && FFXIVSettings.get) return PURE.sanitizeDisplayName(FFXIVSettings.get('character.name')); } catch (_) {}
+    return '';
+  }
+  function ownerName() { return customName() || '玩家' + owner().slice(0, 4); }
+  function canSetName() { return !!(window.FFXIVSettings && FFXIVSettings.set); }
+  // 寫回 portal 設定（空字串＝清掉，回預設名）。回傳是否寫入成功（false＝portal CDN 未載入）。
+  function setName(raw) {
+    var n = PURE.sanitizeDisplayName(raw);
+    if (!canSetName()) return false;
+    try {
+      if (n) FFXIVSettings.set('character.name', n);
+      else if (FFXIVSettings.unset) FFXIVSettings.unset('character.name');
+      else return false;
+    } catch (_) { return false; }
+    return true;
   }
 
   function emit(status) { for (var i = 0; i < listeners.length; i++) { try { listeners[i]({ points: points, online: online, code: code, status: status }); } catch (err) { try { console.warn('room listener error', err); } catch (_) {} } } }
@@ -128,7 +143,7 @@
     isConnected: function () { return !!ws && ws.readyState === 1; },
     getPoints: function () { return points; },
     getOnline: function () { return online; },
-    owner: owner, ownerName: ownerName, history: roomHistory,
+    owner: owner, ownerName: ownerName, customName: customName, canSetName: canSetName, setName: setName, history: roomHistory,
     onChange: function (f) { listeners.push(f); },
     inviteUrl: function () { return code ? location.origin + location.pathname + '?room=' + code : ''; },
   };
