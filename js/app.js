@@ -412,13 +412,19 @@
       ROOM.clearDone(); toast('已清除 ' + done + ' 個已完成', 'ok');
     });
   }
+  // 複製整條＝直接貼進遊戲巨集欄的內容：每行 `/p 地名 ( 21.0 , 14.0 )`。
+  // 用原生 /p（隊友看得到）而非插件指令——遊戲原生沒有「用任意座標插旗」的指令，
+  // <flag>/<pos> 讀的是當下狀態、/coord 是 ChatCoordinates 插件，都無法從工具端指定座標。
+  var MACRO_MAX_LINES = 15;   // FFXIV 巨集單頁行數上限
   function copyRoom() {
     var pts = shared.points || []; if (!pts.length) { toast('清單是空的', 'warn'); return; }
-    // 每行＝可直接貼進遊戲聊天的完整座標（含地名），不再分區塊標題 → 逐行貼、逐行都看得懂
-    var lines = pts.map(function (r, i) {
-      return (i + 1) + '. ' + gameCoord(zoneName(r.map), r) + (r.done ? ' ✓' : '');
+    var lines = pts.map(function (r) { return '/p ' + gameCoord(zoneName(r.map), r) + (r.done ? ' ✓' : ''); });
+    copyText(lines.join('\n')).then(function (ok) {
+      if (!ok) { toast('複製失敗', 'error'); return; }
+      toast('已複製巨集（' + pts.length + ' 行）' +
+        (lines.length > MACRO_MAX_LINES ? '，超過巨集上限 ' + MACRO_MAX_LINES + ' 行，請分兩個巨集貼' : ''),
+        lines.length > MACRO_MAX_LINES ? 'warn' : 'ok');
     });
-    copyText(lines.join('\n')).then(function (ok) { toast(ok ? '已複製整條（' + pts.length + ' 點）' : '複製失敗', ok ? 'ok' : 'error'); });
   }
 
   if (el['route-panel']) el['route-panel'].addEventListener('click', function (e) {
