@@ -18,7 +18,8 @@ date: 2026-07-30
 
 | 候選 | 結論 |
 |---|---|
-| Teamcraft `aetherytes.json`（同 repo 同路徑，與現用 `treasures.json` 同源） | ✅ 採用。268 筆，含 `map` / `x` / `y` / `type` / `nameid` |
+| **本地 `data/item_dict/lspl/aetherytes.json`** | ✅ 採用（**修正**：初版誤接 Teamcraft 網路檔，實測兩者 268 筆內容完全相同，且 `build-data.py` 早就在讀同目錄的 `lspl/maps.json`、marketboard `build_gathering_nodes.py` 也用這份 → 依 DRY 用本地，不多接外部源）|
+| Teamcraft `aetherytes.json`（網路） | ❌ 與本地同內容，多一個網路依賴 |
 | 本地 `place_names.json` | ❌ map-id keyed 的**地區名**，不含水晶 |
 | 本地 `datamining_tc/` 台服解包快取 | ❌ 只有 Action/Item/Status/ClassJob 等 sheet，**無 Aetheryte / PlaceName** |
 | 本地 `game_ref.sqlite` | ❌ 表為 actions / statuses / macro_icons / craft_actions / meta |
@@ -27,16 +28,16 @@ date: 2026-07-30
 
 ## 3. 決策
 
-1. **不以 `type` 過濾，該圖上的水晶全收**。原本打算只取 `type 0`，實測發現 map 213（龍堡內陸低地）只有 type 1 的兩顆——那正是泰勒斐爾／阿涅斯特里恩，遊戲裡傳得到；只濾 type 0 會讓該圖一顆不剩。城內 aethernet shard 只存在於城市地圖，而城市地圖不是藏寶圖區 → 天然不會混進來。
+1. **只收 `type === 0` 主水晶**（可直接傳送的目的地）。此決策翻轉兩次，留痕：初版只取 type 0 → 因 map 213（龍堡內陸低地）會一顆不剩而改成全收 → **Owner 2026-07-30 判定改回只收 type 0**：type 1 是以太之光（`aethernetCoords` 0,0），實際是區域出口／換圖點，不是傳送目的地，標上去只是雜訊。沒有主水晶的圖就是真的沒有（map 213 即為此），留空、不拿以太之光充數。
 2. **不顯示水晶名稱**。名稱要 `nameid` → PlaceName 的台服正名，本地無權威源（見上表）；鐵則「禁自建對照表 / 禁自創譯名」→ 只畫圖示 + 位置。玩家在遊戲地圖上看得到名字，位置對得起來就夠。
 3. **座標寫進 `data/maps.json` 各 map 的 `aetherytes: [{x, y}]`**（不另開檔）：前端已載 maps.json，多一個檔就多一次 fetch 與一次快取失效面；欄位是**新增**、向後相容。
-4. **顯示層**：區域大圖與放大檢視都畫，樣式與挖掘點編號標記明顯區隔（水晶＝菱形、非編號），`aria-hidden`（非互動、不搶鍵盤焦點）。
+4. **圖示沿用既有實作，不自創**：主水晶 `060453`（22px，xivapi），與 `ffxiv-tw-marketboard/modules/map_view.js` 同一組——初版自創「金色菱形」被 Owner 指出（DRY 鐵則：改動前先找既有模組，我漏查）。該檔並已記教訓「不用 emoji：顏色/大小/字重隨系統字型，在米色地圖上幾乎看不到」。區域大圖與放大檢視共用同一個產生器 `TreasureRouteMap.aethIcon`。
 
 ## 4. 驗收條件
 
-- `py -3.11 tools/build-data.py` 重建後 `maps.json` 28 張圖皆帶 `aetherytes`，總數 = 81，且 map 213 有 2 顆（回歸守門：type 過濾誤判的案例）。
+- `py -3.11 tools/build-data.py` 重建後 `maps.json` 28 張圖皆帶 `aetherytes` 欄位，主水晶總數 = 65；map 213（龍堡內陸低地）為空＝該圖真的沒有主水晶。
 - 區域大圖與放大檢視都看得到水晶標記，與挖掘點一眼可分。
-- `npm test` 全綠且基線只升（新增 drift 斷言：每張圖都有 `aetherytes`、座標在合理範圍）。
+- `npm test` 全綠且基線只升（新增 drift 斷言：座標值域、不得殘留 `t` 欄位、總量不塌（≥60））。
 - 端到端：本地 `wrangler dev`（B-004 修好後可用）開真房間加點，確認水晶隨大圖一起出現。
 
 ## 5. 不做

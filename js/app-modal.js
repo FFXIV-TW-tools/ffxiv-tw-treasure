@@ -70,11 +70,10 @@
         var wrap = document.createElement('div'); wrap.className = 'tre-mapview';
         if (opts.image) {
           wrap.style.backgroundImage = 'url("' + opts.image + '")';
-          (opts.aetherytes || []).forEach(function (a) {
-            var t = document.createElement('span'); t.className = 'tre-routemap__aeth'; t.setAttribute('aria-hidden', 'true');
-            t.style.left = a.x + '%'; t.style.top = a.y + '%'; t.title = '傳送水晶';
-            wrap.appendChild(t);
-          });
+          // 傳送點圖示與區域大圖共用同一產生器（route-map.js），不在此另寫一份
+          if (window.TreasureRouteMap && TreasureRouteMap.aethIcon) {
+            (opts.aetherytes || []).forEach(function (a) { wrap.appendChild(TreasureRouteMap.aethIcon(a)); });
+          }
           (opts.markers || []).forEach(function (mk) {
             var s = document.createElement('span');
             s.className = 'tre-fullmap__marker' + (mk.active ? ' is-active' : '');

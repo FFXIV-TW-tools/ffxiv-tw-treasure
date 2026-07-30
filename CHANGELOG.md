@@ -3,6 +3,20 @@
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
 
+## 2026-07-30 — 水晶改用既有圖示與本地資料源（只留主水晶）＋ 共享路線面板拆檔
+
+> cycle `2026-07-30-aetheryte-on-map`（續前段；spec 同一份，決策已回寫）。
+
+### Fixed
+- **水晶圖示改用既有那組，不再自創**：主水晶 `060453`（22px, xivapi），與 `ffxiv-tw-marketboard/modules/map_view.js` 同一組圖示／尺寸；區域大圖與放大檢視共用 `TreasureRouteMap.aethIcon`。**為什麼**：前一版自創「金色菱形」——Owner 指出市場／採集地圖早有水晶渲染範例。這是 DRY 鐵則「改動前先找既有模組」的漏查（那份檔案裡甚至已寫著「不用 emoji：在米色地圖上幾乎看不到」的實測教訓）。
+- **資料源改本地 `data/item_dict/lspl/aetherytes.json`**：實測與 Teamcraft 網路檔 268 筆內容**完全相同**，且 `build-data.py` 早就在讀同目錄的 `lspl/maps.json`、marketboard 也用這份 → 拿掉多接的網路源與其快取檔。
+- **只留主水晶（type 0），濾掉以太之光（type 1）**：以太之光是區域出口／換圖點、不是傳送目的地，標上去只是雜訊（Owner 判定）。前一版因「map 213 濾掉會一顆不剩」而全收是誤判——龍堡內陸低地本來就沒有可直傳的大水晶，不該拿出口充數。主水晶 81 → **65 顆**，map 213 留空。
+### Changed
+- **拆 `js/route-panel.js`**（188 行）：共享路線面板的渲染與操作（清單列／區域大圖／建議順序／清空／清除已完成／複製巨集）整塊搬出，依賴由 app.js 注入（`getMaps`/`getShared`/`toast`/`confirmModal`…），該檔不自己抓房間狀態。**app.js 505 → 356 行**，回到門檻內。
+### Verified
+- `npm test` 4 套全綠 **85 assert**（core 14 / room-pure 17 / drift 9 / worker 45；drift 水晶斷言改為值域 + 不得殘留 `t` + 總量 ≥60 不塌）。
+- **端到端（本地 worker + 真房間）**：拆檔後重測 5 點跨 2 區 → 勾完成（進度 1/4）／建議順序（stat 正確）／點標記開放大檢視（座標行「第 1 點 · X:21.3 Y:19.4 ✓ 已完成」）／ESC 關閉／清空 + 離開乾淨；水晶圖示 2 顆實際載入成功（`naturalWidth>0`），龍堡參天高地有 2 顆、龍堡內陸低地 0 顆（截圖確認符合資料）。
+
 ## 2026-07-30 — 地圖上顯示傳送水晶 ＋ 修好本地 wrangler dev
 
 > cycle `2026-07-30-aetheryte-on-map`（spec: [docs/specs/2026-07-30-aetheryte-on-map-design.md](docs/specs/2026-07-30-aetheryte-on-map-design.md)；動生成資料 schema 故不走旁路）。

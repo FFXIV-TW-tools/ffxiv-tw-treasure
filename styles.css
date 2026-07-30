@@ -244,13 +244,11 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   background-color: var(--color-bg, #080c13);
   background-repeat: no-repeat; background-position: center; background-size: contain;
 }
-/* 傳送水晶：菱形＋金色，與挖掘點的圓形編號標記一眼可分（無名稱＝無台服正名權威源，只給位置）*/
+/* 傳送點：遊戲原圖示（主水晶 060453 / 以太之光 060430，xivapi），與 marketboard 同一組。
+   尺寸由 img width/height 決定（同 marketboard 22/15），這裡只負責定位與可讀性描邊。 */
 .tre-routemap__aeth {
-  position: absolute; transform: translate(-50%, -50%) rotate(45deg);
-  width: 11px; height: 11px; pointer-events: none;
-  background: var(--color-accent-gold, #e6c068);
-  border: 1px solid var(--color-bg, #080c13);
-  box-shadow: 0 0 6px var(--color-accent-gold, #e6c068);
+  position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--color-bg, #080c13));
 }
 .tre-routemap__lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .tre-routemap__lines polyline {

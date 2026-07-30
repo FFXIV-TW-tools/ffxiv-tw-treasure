@@ -6,6 +6,18 @@
   'use strict';
   var SVG_NS = 'http://www.w3.org/2000/svg';
 
+  // 主水晶圖示 060453（xivapi），與 marketboard modules/map_view.js 同一組圖示與尺寸——DRY，
+  // 且該檔已記教訓「不用 emoji：在米色地圖上幾乎看不到」。只畫主水晶（資料端已濾掉以太之光）。
+  function aethIcon(a) {
+    var img = document.createElement('img');
+    img.className = 'tre-routemap__aeth';
+    img.src = 'https://xivapi.com/i/060000/060453.png';
+    img.width = 22; img.height = 22; img.loading = 'lazy'; img.alt = '';
+    img.title = '主水晶（傳送點）';
+    img.style.left = a.x + '%'; img.style.top = a.y + '%';
+    return img;
+  }
+
   // opts: {image, points:[{pct:{x,y}, label, done, mine}], aetherytes:[{x,y}(百分比)], onPick(i)}
   function render(opts) {
     opts = opts || {};
@@ -24,13 +36,8 @@
       svg.appendChild(line); wrap.appendChild(svg);
     }
 
-    // 傳送水晶（先畫→墊在挖掘點標記下層）：讓人看得出這區該傳哪一顆過去。無名稱（無台服正名權威源）。
-    (opts.aetherytes || []).forEach(function (a) {
-      var s = document.createElement('span'); s.className = 'tre-routemap__aeth'; s.setAttribute('aria-hidden', 'true');
-      s.style.left = a.x + '%'; s.style.top = a.y + '%';
-      s.title = '傳送水晶';
-      wrap.appendChild(s);
-    });
+    // 傳送點（先畫→墊在挖掘點標記下層）：看得出這區該傳哪一顆過去。
+    (opts.aetherytes || []).forEach(function (a) { wrap.appendChild(aethIcon(a)); });
 
     pts.forEach(function (p, i) {
       var b = document.createElement('button'); b.type = 'button';
@@ -44,5 +51,5 @@
     return wrap;
   }
 
-  window.TreasureRouteMap = { render: render };
+  window.TreasureRouteMap = { render: render, aethIcon: aethIcon };
 })();
