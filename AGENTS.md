@@ -25,6 +25,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **root `package.json` 不可設 `"type":"module"`**（2026-07-04 踩過）：`treasure-core.js` 是 UMD（`module.exports`），設了會把它當 ESM → `.mjs` 測試的 `import TC from` default-import 失效。root 保持 CJS；`.mjs` 測試本就 ESM 不受影響。`worker/` 自帶 `"type":"module"`（worker code 是 ESM）不衝突。
 - **`DIG_W/DIG_H`(app.js) ↔ `--dig-w/--dig-h`(styles.css) 雙寫必須同值**：裁切卡偏移用 JS 常數、卡片視窗尺寸用 CSS，漂移 → pin 偏離挖掘點。`tests/drift.test.mjs` 機械守（改動後跑 `npm test`）。
 - **`improve2Opt`（2-opt）是閉環假設**（尾端 `(k+1)%length` 幻邊）：本工具是**開放路徑**（`calcTotalDistance` 只累加 n-1 段）。目前 `use2Opt` 預設關、無產品呼叫者；啟用前先修尾端幻邊，且測試用**固定 golden `deepEqual`**釘行為，**勿用**「≤ 非2opt」單調斷言（開放路徑下會 flaky）。
+- **外部圖片主機一律同步 `_headers` 的 CSP `img-src`**：資料重建可能讓上游換網域（2026-07-30 實踩：地圖網址換 v2.xivapi.com，CSP 沒跟 → 線上地圖全黑）。**本機 `python -m http.server` 不套 `_headers`，CSP 問題本地測不出來**；`tests/drift.test.mjs` 已機械守（圖片主機 ⊆ img-src 白名單）。
 - **地圖上的傳送點沿用既有實作**：圖示＝主水晶 `060453`（22px，xivapi），與 marketboard 的 map_view 模組（external/ffxiv-tw-marketboard 下 modules 目錄）同一組（**勿自創圖示／emoji**——該檔已記「emoji 在米色地圖上幾乎看不到」）；資料＝monorepo item_dict 的 lspl 目錄下 aetherytes.json（本地權威；勿接 Teamcraft 網路檔，內容相同）；**只收 type 0 主水晶**，type 1 是以太之光＝出口／換圖點，不是傳送目的地（2026-07-30 Owner 判定）。
 - **繁中至上 / 繁中名走本地權威源**：物品名 = `item_lookup.name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用「地圖Gxx」錯名）；地名 = `place_names.json`（map-id keyed）。**禁自建對照表**。座標公式 = FFXIV 官方 datamining；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
 - **worker 只導出 function**：workerd 把 module 具名導出當 entrypoint 檢查，導出裸值（number/物件）會讓整支 worker 起不來、`wrangler dev` 直接掛（2026-07-30 B-004：`MAX_CONN` 常數導出 → 本地端到端測試斷了好幾輪都沒人發現）。測試需要常數就導出 getter（`maxConn()`）。
@@ -41,7 +42,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 
 ## VERIFY（改動後必跑）
 
-> 測試基線 **4 套全綠 · 85 assert 呼叫**（core 14 / room-pure 17 / drift 9 / worker 45；`npm test` exit 0；**只准升不准降**；2026-07-30 水晶／拆檔輪後實測）。
+> 測試基線 **4 套全綠 · 86 assert 呼叫**（core 14 / room-pure 17 / drift 10 / worker 45；`npm test` exit 0；**只准升不准降**；2026-07-30 CSP hotfix 後實測）。
 
 ```bash
 npm test   # 串三套：core（座標/路線 golden）+ drift（DIG常數/maps image/死CSS）+ worker（op-based 並發不互蓋）

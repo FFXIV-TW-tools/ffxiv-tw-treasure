@@ -3,6 +3,17 @@
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
 
+## 2026-07-30 — hotfix：線上地圖全黑（CSP 擋掉 v2.xivapi.com）
+
+> cycle `2026-07-30-map-csp-hotfix`（旁路：單檔設定修復 + 一條機械守門）。**本輪自造的 regression**，Owner 回報「有些人顯示的地圖是黑色的」。
+
+### Fixed
+- **`_headers` 的 CSP `img-src` 放行 `https://v2.xivapi.com`**。**根因**：同日重跑 `build-data.py`（為了加傳送水晶）時，本地 `lspl/maps.json` 的地圖網址已隨上游在 2026-07 換成 `v2.xivapi.com/api/asset/map/...`（原 `xivapi.com/m/....jpg`），但 CSP 白名單只有舊網域 → 線上 28 張地圖底圖全被擋，只剩深色底＝「黑色地圖」。**為什麼本機測不到**：`python -m http.server` 不套 `_headers`，CSP 只在 Cloudflare Pages 生效，所以同日的本地端到端測試（含真房間）全綠卻照樣壞在線上。**又是既有實作已解過的題**：marketboard `_headers` 早就兩個網域都放行，該檔註解甚至寫著上游換 v2 的事。
+### Added
+- **drift 守門：圖片主機 ⊆ CSP 白名單**——掃 `maps.json` 的 `image` 與 JS 內的圖片 URL，主機不在 `_headers` `img-src` 就紅（負向測試實證：拿掉 v2 立刻 fail，訊息直指 CSP）。這條把「本機測不出的線上 CSP 問題」變成 commit 前就擋得住。
+### Verified
+- `npm test` 4 套全綠 **86 assert**（drift 9 → 10）。`https://v2.xivapi.com/api/asset/map/r2f1/00` 與 `https://xivapi.com/i/060000/060453.png` 皆實測 200。
+
 ## 2026-07-30 — 水晶改用既有圖示與本地資料源（只留主水晶）＋ 共享路線面板拆檔
 
 > cycle `2026-07-30-aetheryte-on-map`（續前段；spec 同一份，決策已回寫）。
