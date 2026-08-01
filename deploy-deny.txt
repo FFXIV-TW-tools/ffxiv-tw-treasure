@@ -9,3 +9,8 @@ package.json
 tests
 tools
 worker
+.wrangler
+.venv
+.pytest_cache
+node_modules
+package-lock.json
