@@ -19,7 +19,7 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 git ls-files -z | while IFS= read -r -d '' f; do
   case "$f" in
     # 內部目錄：文件／建置工具／測試／CI／Worker 後端源碼（Worker 由 wrangler 另外部署，不該進靜態站）
-    docs/*|tools/*|scripts/*|tests/*|test/*|.github/*|.claude/*|wasm/src/*|worker/*) continue ;;
+    docs/*|tools/*|_tools/*|_cache/*|templates/*|scripts/*|tests/*|test/*|.github/*|.claude/*|wasm/src/*|worker/*) continue ;;
     # 內部檔案類型
     *.md|*.py|*.ps1|*.sh|*.rs|*.ts|*.toml|*.lock|*.yml|*.yaml|*.ini|*.example) continue ;;
     package.json|package-lock.json|pnpm-lock.yaml|tsconfig*.json|.gitignore|.gitattributes|.rgignore|.env*) continue ;;
