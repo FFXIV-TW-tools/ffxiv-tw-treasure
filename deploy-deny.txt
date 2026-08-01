@@ -1,0 +1,11 @@
+.gitignore
+AGENTS.md
+CHANGELOG.md
+CLAUDE.md
+README.md
+deploy-prepare.sh
+docs
+package.json
+tests
+tools
+worker
