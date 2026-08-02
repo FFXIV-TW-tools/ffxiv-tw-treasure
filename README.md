@@ -49,17 +49,33 @@ node worker/tests/worker.test.mjs   # 多人房間 applyOp / validate / originAl
 index.html              # 三步精靈 DOM（portal codex 設計系統，head 走 portal CDN）
 styles.css              # 工具樣式（用 portal token / codex 元件）
 js/treasure-core.js     # 座標換算 + 路線優化（純函式，window.TreasureCore）
-js/app.js               # 三步狀態機 + 裁切卡渲染 + 複製座標 + 房間 UI
+js/app.js               # 三步狀態機 + 裁切卡渲染 + 房間 UI + 對各模組注入依賴
+js/app-modal.js         # 對話框元件（codex-modal）：破壞性操作確認 + 挖掘點放大檢視
+js/route-map.js         # 區域路線大圖純渲染器：SVG 順序線 + 編號標記 + 主水晶圖示
+js/route-panel.js       # 共享路線面板：清單／大圖／建議順序／清空／複製巨集（依賴由 app.js 注入）
 js/room.js              # 多人共享路線 client（WebSocket、op-based，window.TreasureRoom）
-js/room-pure.js         # room client 純輔助（UMD，可單元測試）：backoffDelay + sanitizeJoinCode
+js/room-pure.js         # room client 純輔助（UMD，可單元測試）：backoffDelay + sanitizeJoinCode + sanitizeDisplayName
 worker/                 # 多人房間後端：Cloudflare Durable Object（op-based、SQLite、6h alarm 過期）
 data/{grades,maps,treasures}.json   # 生成資料（build-data.py 產）
 tools/build-data.py     # 資料生成（Teamcraft + item_dict 繁中）
 tests/core.test.mjs     # 演算法 golden test
 tests/room-pure.test.mjs # room 純輔助（backoff/房號淨化）單元測試
-tests/drift.test.mjs    # 常數/資料/死 CSS 機械檢查
-worker/tests/worker.test.mjs   # 房間 op-based 並發正確性
+tests/drift.test.mjs    # 常數/資料/死 CSS/部署分類 機械檢查
+worker/tests/worker.test.mjs   # 房間 op-based 並發正確性 + 公開路由閘
 ```
+
+## 部署（CF Pages）
+
+**不是發佈 repo 根目錄**：CF dashboard 設 Build command = `sh deploy-prepare.sh`、Build output directory = `_site`。
+
+```
+deploy-prepare.sh       # build step：依允許清單產 _site/，未分類項目即 build 失敗（fail-closed）
+deploy-allow.txt        # 站台資產允許清單 ← 新增頁面/資料夾要加這裡
+deploy-deny.txt         # 內部資產（文件/測試/工具/worker 源碼）
+_headers                # CSP / 快取（資料檔一律 max-age=0 + must-revalidate）
+```
+
+為什麼要這一層：CF Pages 沒有 build 步驟時會把整個 repo 當靜態資產上傳，`AGENTS.md`／`docs/`／`tests/`／worker 源碼全部變成可直接 GET 的公開檔（2026-08-01 實測 12/13 站中招）。private repo 只保護「誰能 clone」，不保護「已部署的檔案誰能下載」。
 
 ## License / Disclaimer
 

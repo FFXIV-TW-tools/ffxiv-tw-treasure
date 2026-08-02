@@ -3,6 +3,60 @@
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
 
+## 2026-08-01 — 部署面改採允許清單 fail-closed（本 repo 側收官）
+
+> cycle `2026-08-01-deploy-surface`（跨 12 站的 monorepo 級 initiative，全貌與根因見 monorepo root CHANGELOG 同 cycle 段；本段只記本 repo 的落地與驗收）。**補記於 2026-08-02**——當時五個 commit 只動了腳本與清單，沒留 repo-local 收官段（R3 健檢指出）。
+
+### Changed
+- **CF Pages 不再發佈 repo 根目錄**：改由 `deploy-prepare.sh` 依 `deploy-allow.txt` 產 `_site/`（dashboard：Build command = `sh deploy-prepare.sh`、Build output = `_site`）。此前 `AGENTS.md`／`docs/`（含歷次健檢報告＝現成弱點地圖）／`tools/`／`tests/`／`worker/` 後端源碼全部是該網域下可直接 GET 的公開檔。
+- **允許清單而非排除清單**：頂層任何未分類項目 → build 直接失敗。排除清單的預設是「全部發佈」，新增目錄天生外洩、只能靠人記得補；同一天實測漏了兩次。
+- 依 codex／grok 雙外審修 7 項（消除殘餘 fail-open 路徑）：`while` 迴圈的 subshell 讓 `cp` 失敗不中止 → 改先落檔再讀；`git` 不可用時原本退回 `cp -r`＝安全語意悄悄放寬 → 改成寧可中止；出貨驗收由副檔名黑名單改**白名單**；允許路徑下的 symlink 一律拒絕（`cp` 會解參照，可把 deny 區內容複製成看似安全的 `.json`）。
+- 略過 CF build 容器產物（`package-lock.json`／`node_modules` 等）——容器在跑 build command 前會自動 `npm install`，產生 repo 裡沒有的檔案，**treasure 正是被這條擋下的 canary**。
+
+### Verified
+- `sh deploy-prepare.sh` ✓ 16 檔（純站台資產：`_headers`／`data/*.json`×3／favicon／`index.html`／`js/*.js`×7／`robots.txt`／`sitemap.xml`／`styles.css`）。
+- 線上 cache-bust 探測：`/AGENTS.md`、`/worker/src/index.js`、`/deploy-allow.txt` 全回 SPA fallback `text/html`＝現行部署乾淨。
+- **殘留（已知未收斂）**：稽核期間被請求過的少數路徑仍在 CF 邊緣快取（舊部署的 `s-maxage=604800`），不帶 cache-bust 打 `/AGENTS.md` 仍會回 `text/markdown`。pages.dev 非自有 zone、無 Purge Everything → 收斂路徑是等 TTL，最長 7 天。複探條目見 BACKLOG B-010。
+
+## 2026-08-02 — R3 全維健檢的須修改項（worker 授權破口 + 機械閘 + 文件 drift）
+
+> cycle `2026-08-02-R3-fixes`（依據 [R3 健檢報告](docs/health-reviews/2026-08-01-R3全維-health-review.md) 與[修復計畫](docs/health-reviews/2026-08-01-R3全維-fix-plan.md)；B-012／B-013／spec status 待 Owner 拍板故未動）。
+
+### Security
+- **`POST /room/:code` 不再能整份覆蓋房間清單**（B-006）。**破口原樣**：default fetch 對 `/room/:code` 不分 method 原封轉發到 DO，而 `Room.fetch` 對任何非 WS 的 POST 一律當建房 seed 處理 → 外部一行 `curl -X POST .../room/<房號>`（無 Origin、空 body、`text/plain` 故無 preflight）就能把全隊清單覆蓋成空、重設 6h alarm，**且該分支不廣播** → 線上 client 停在舊清單，直到下一個 op 才「全隊點突然消失」。門檻只有 6 碼房號（會出現在邀請連結／截圖）。這繞過 origin 白名單、繞過 `confirmModal`、也繞過 op-based「不整份覆蓋」的架構鐵則，正面打到「多人清單不掉點」的核心承諾。
+  - **健檢當場對自建測試房線上實證**（HTTP 200、`GET` 顯示點被清空），不是靜態推論。
+  - 修法刻意**兩層**（任一層日後被改動、另一層仍在）：① default fetch 對 `/room/:code` 只轉發 GET（WS 升級握手本身就是 GET），其餘 405；② `Room.fetch` 的 POST 分支加 `pathname === '/seed'` 守衛（內部通道用的正是 `https://do/seed`），其餘 404。兩者抽成純函式 `publicRoomMethodAllowed` / `isSeedRequest` 並釘 7 個 assert（先寫紅燈測試再修）。
+
+### Added
+- **測試基線接上 pre-commit gate 6**（B-011）：四支測試各自從**自身原始碼**數出 assert 呼叫點並印出，AGENTS.md VERIFY 段掛四個 `TEST-BASELINE` 標記。此前 `check-test-baseline.js` 對本 repo 整支跳過（13 個 external repo 已有 7 個接上，本 repo 是漏網者），「只准升不准降」純靠人工紀律。
+  - **為什麼數「呼叫點」不數「執行次數」**：執行次數會被資料驅動迴圈放大（drift 實測 223，其中 130 來自 65 顆水晶 × 2），地圖資料改版就讓基線變動＝假紅燈。**也不印寫死的字面量**——那等於讓 gate 比對兩個常數，正是這道閘要防的漂移。
+  - 負向驗證：臨時加一條 assert → gate 立刻報「實測 15 > 宣告 14」並存證據檔。
+- **部署分類閘提前到 commit 前**（drift 測試）：頂層 tracked 項目必須全被 `deploy-allow.txt` ∪ `deploy-deny.txt` ∪ 腳本固定略過清單覆蓋，且兩清單不得有交集（腳本 allow 先判且無 else，同名時 deny 形同無效）。此前分類閘只在 CF build 期跑 → 新增頂層檔會 push 成功但 build 失敗、站台靜默停在舊版。略過清單是**解析腳本**而非抄寫，不製造第二份會漂的清單。
+
+### Fixed（文件 drift，皆為「照做會出錯」等級）
+- **部署後驗指令補 cache-bust**（B-007）：`curl -sI .../AGENTS.md` 未帶 cache-bust 時會命中舊部署留在邊緣的物件（`s-maxage=604800`）回 `text/markdown`＝**假紅燈**。新鐵則段裡唯一的驗收動作照跑必紅，會讓下次真外洩被當雜訊忽略。已改成帶 cache-bust 並補判讀規則（`CF-Cache-Status: HIT` ＋大 `Age` ＝殘留非外洩，最長 7 天自癒；pages.dev 非自有 zone 無 Purge Everything）。
+- **AGENTS.md／CLAUDE.md 不再宣稱「本 repo 無 `docs/specs/`」**（B-008）：spec 自 07-30 已存在且 CHANGELOG 已 link，而同一份 AGENTS 又要求「實作前必開該 cycle spec 全文」——讀者被前句說服而跳過，那份 spec 正裝著翻轉過兩次的「只收 type 0」決策。
+- **README 結構補齊 + 新增「部署」段**（B-009）：原本缺 `app-modal.js`／`route-map.js`／`route-panel.js` 三支已上線模組，也完全沒提 `deploy-prepare.sh` + allow/deny + `_headers` 這條 build pipeline。README 是給不讀 AGENTS 的人的唯一地圖。
+- **開發循環段改 pointer-only**（B-014）：DEVLOOP v1.21 §4.4 已廢除 AGENTS.md 內嵌摘要與 per-repo 版本戳（理由：抄一份會過期的摘要＝第二真相源），本檔仍停在「10 條摘要＋對齊 v1.20」。改成正典 pointer ＋本 repo 差異（工件位置／健檢落點／協定變更時的部署順序）。同時修掉 `check-devloop-artifacts` R15 報的 3 條 pointer 斷鏈。
+- **檔案大小鐵則行去矛盾**：同一行前半寫「共享路線面板已拆到 route-panel.js」、後半又命令「下次實質接觸必須先拆＝把共享路線面板抽成獨立檔」（356 行本就未觸發任何門檻），照做等於對健康檔案做無謂重構；順帶移除與檔案大小無關的「遇授權牆不靜默跳過」模板殘留。
+- **VERIFY 段「串三套」改「串四套」**、room-pure 描述補 `sanitizeDisplayName`（同段第 45 行早已寫「4 套」，自相矛盾）。
+- **spec 勘查段與決策段的矛盾標註**：line 27 寫 type 1「兩者皆可傳送」、§3.1 寫 type 1 不是傳送目的地——只讀勘查段會得到相反結論。已加交叉引用（`status: draft → approved` 屬 Owner 權責，未動）。
+- **`_INDEX.md` 07-11 列狀態更正**：原寫「worker 待 shawn 正式 deploy（前端待 push）」，`wrangler deployments list` 實證該批已於 2026-07-11T20:49:54Z 部署（晚於 commit `d6ab2d2` 12 小時）。這是 07-11 那輪才修過一次的同型錯誤，三週內復發。
+
+### Verified
+- `npm test` 4 套全綠 **86 → 96 assert 呼叫點**（core 14 / room-pure 17 / drift 10→13 / worker 45→52；只升）。
+- `node tools/check-test-baseline.js --repo external/ffxiv-tw-treasure`：**檢查 4 項｜不符 0**（此前為「跳過」）；負向探針驗證會紅。
+- `node tools/check-devloop-artifacts.js --repo external/ffxiv-tw-treasure`：✓ 工件格式合格，**R15／R18 警示全清**。
+- `sh deploy-prepare.sh` ✓ 16 檔；drift 部署分類閘負向驗證（新 tracked 頂層檔 → exit 1）。
+- `pnpm -C worker cf:deploy:dry` 0 error（11.65 KiB，DO binding `Room` 正確）。
+- ⚠️ **worker 待正式 deploy（STOP by shawn）**：B-006 動 `worker/src/index.js`，前端 push 不會觸發 worker 部署。deploy 後建議用測試房重跑實證命令（應回 405／404 且點還在），並回寫本段。
+
+### 未做（待 Owner 拍板）
+- **B-012** step 2 縮圖 ~4 MB（實測底圖 618–760 KB × 最多 6 張、上游無縮圖參數）：A 案建置期產 256px webp／B 案 IntersectionObserver 延後載入，取捨不同故不自決。
+- **B-013** 單人模式複製座標路徑：推薦復用既有 `MODAL.mapView(onCopy)`，但會改變「未入房時點卡片」的行為，交 Owner 定。
+- 批次 1 的四個選配 low 項（DO 回 error reason／`st==null` 併入 expired／`order` no-op 收斂／worker 端 `ownerName` 去控制字元）——納入可省一次 deploy 窗，但會擴大單次 commit scope。
+- spec `status: draft → approved`（DEVLOOP §4：僅 Owner）；memory 刪／升級候選（見報告「Memory / 文件稽核」段）。
+
 ## 2026-07-30 — hotfix：線上地圖全黑（CSP 擋掉 v2.xivapi.com）
 
 > cycle `2026-07-30-map-csp-hotfix`（旁路：單檔設定修復 + 一條機械守門）。**本輪自造的 regression**，Owner 回報「有些人顯示的地圖是黑色的」。
