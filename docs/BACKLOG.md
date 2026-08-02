@@ -5,7 +5,7 @@
 > 全項均 confirmed low/info（非缺陷）——2026-07-04 健檢「須修改」已全清並上線，此處為留觀察／低 ROI 硬化的單一佇列。
 > 2026-07-11 R2 複檢建議（worker origin/連線上限、前端 ➕/✓·移焦·播報·進度、drift token 邊界、room-pure 抽測）亦全批清（見 CHANGELOG）；B-001~003 R2 複檢確認不變。
 > **2026-08-01 R3 全維健檢**（7 維，首含 build-release）新增 B-006～B-014＝該輪「須修改」9 項（計畫見 `docs/health-reviews/2026-08-01-R3全維-fix-plan.md`）。B-001／B-002／B-003 本輪複核確認不變、不重報。
-> **2026-08-02 執行**：不需 Owner 拍板的 7 項（B-006／007／008／009／010／011／014）已完成（cycle `2026-08-02-R3-fixes`，見 CHANGELOG）；B-010 拆出追蹤項 B-015。**剩 B-012／B-013 待 Owner 選做法**；B-006 已修但 **worker 待正式 deploy（STOP）**。
+> **2026-08-02 執行**：不需 Owner 拍板的 7 項（B-006／007／008／009／010／011／014）已完成（cycle `2026-08-02-R3-fixes`，見 CHANGELOG）；B-010 拆出追蹤項 B-015。**剩 B-012／B-013 待 Owner 選做法**；B-006 已修並於 **2026-08-02T15:14:05Z deploy、線上驗證通過**（攻擊回 405、點無損）。
 > **四軸快篩（DEVLOOP §4.2）**：開放條目在 `(P, type)` 後**前置** `【建議 高/中/低｜延遲風險 低/中/高｜執行風險 低/中/高｜副作用 無/一句具體】`——建議＝提案方誠實推薦；延遲風險＝不快點做的風險；執行風險＝反悔成本；副作用＝除主目標外還會動到什麼。由 `check-devloop-artifacts` **R11** 機械檢查：新條目缺軸即擋 commit。
 
 - [x] **B-006** (P1, security)【建議 高｜延遲風險 中｜執行風險 中｜副作用 動 worker 路由層＋需一次 deploy STOP】 `POST /room/:code` 未授權即整份覆蓋房間權威清單 — `worker/src/index.js:160-162` 不分 method 原封轉發到 DO，`Room.fetch:212-223` 對任何非 WS 的 POST 一律當 seed。**2026-08-01 線上實證**（自建測試房）：無 Origin、`text/plain`、空 body 的 POST 回 200 且點被清空，且**不廣播** → client 停在舊清單直到下一個 op 才「全隊點突然消失」；並重設 6h alarm（可復活過期房）。門檻只有 6 碼房號。修法：default fetch 只轉發 GET/WS，`Room.fetch` POST 加 `pathname === '/seed'` 守衛（兩層），並抽純函式釘測試。來源: 健檢 2026-08-01 須修改 1 ✓ 完成於 cycle 2026-08-02-R3-fixes

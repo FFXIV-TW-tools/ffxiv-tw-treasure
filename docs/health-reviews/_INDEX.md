@@ -4,6 +4,6 @@
 
 | 日期 | 子專案 | 體質分 | 使用者分 | 報告 | 計畫 | 狀態 |
 |------|--------|:------:|:--------:|------|------|------|
-| 2026-08-01 | treasure（全站 7 維，首含 build-release）| 7.7 | 7.0 | [報告](2026-08-01-R3全維-health-review.md) | [計畫](2026-08-01-R3全維-fix-plan.md) | 待辦（須修改 9 項＝B-006～B-014；分數較 R2 下降因**範圍擴大**非退步，不可直接比。`POST /room/:code` 未授權覆蓋已線上實證，修完需 worker deploy STOP）|
+| 2026-08-01 | treasure（全站 7 維，首含 build-release）| 7.7 | 7.0 | [報告](2026-08-01-R3全維-health-review.md) | [計畫](2026-08-01-R3全維-fix-plan.md) | 修復中（須修改 9 項＝B-006～B-014）——**2026-08-02 已完成 7 項**（cycle `2026-08-02-R3-fixes`）：worker 授權破口已修、**已 deploy 15:14Z 並線上驗證**（攻擊回 405、點無損）；基線接上 gate 6（86→96 呼叫點）＋部署分類閘提前；文件 drift 全清。**剩 B-012／B-013 待 Owner 拍板做法**，另有 B-015（08-08 後複探快取殘留）。分數較 R2 下降因**範圍擴大**非退步，不可直接比 |
 | 2026-07-11 | treasure（全站）| 8.4 | 7.5 | [報告](2026-07-11-R2複檢-health-review.md) | [計畫](2026-07-11-R2複檢-fix-plan.md) | 全建議批清（worker origin/連線上限 + 前端 ➕/✓·移焦·播報·進度 + drift token 邊界 + room-pure 抽測；基線 54→73 assert）；**已完成**——worker 已於 2026-07-11T20:49:54Z 部署（`wrangler deployments list` 實證，晚於該批 commit `d6ab2d2` 12 小時）、前端已 push。原狀態行「待 deploy」是人工摘要未回寫，2026-08-01 R3 健檢查證後更正 |
 | 2026-07-04 | treasure（全站）| 7.6 | 7.0 | [報告](2026-07-04-treasure-health-review.md) | [計畫](2026-07-04-treasure-fix-plan.md) | 已完成（須修改+建議全清；前端已上線，worker 已 deploy 2026-07-04 — 硬化 commit `ce9cbbe` 後 11 分於 11:49:11Z 部署，其後無 worker 改動）|

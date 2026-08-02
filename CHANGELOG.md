@@ -49,7 +49,7 @@
 - `node tools/check-devloop-artifacts.js --repo external/ffxiv-tw-treasure`：✓ 工件格式合格，**R15／R18 警示全清**。
 - `sh deploy-prepare.sh` ✓ 16 檔；drift 部署分類閘負向驗證（新 tracked 頂層檔 → exit 1）。
 - `pnpm -C worker cf:deploy:dry` 0 error（11.65 KiB，DO binding `Room` 正確）。
-- ⚠️ **worker 待正式 deploy（STOP by shawn）**：B-006 動 `worker/src/index.js`，前端 push 不會觸發 worker 部署。deploy 後建議用測試房重跑實證命令（應回 405／404 且點還在），並回寫本段。
+- ✅ **worker 已部署並線上驗證**：shawn 於 **2026-08-02T15:14:05Z** deploy（`wrangler deployments list`，version `d26881af`）。隨即對新建測試房重跑實證命令：無 Origin 的 `POST /room/<房號>` 回 **405 `method_not_allowed`**（修前是 200 ＋清空）、**點完好無損**、`GET` 快照仍 200、建房路徑正常。破口關閉。
 
 ### 未做（待 Owner 拍板）
 - **B-012** step 2 縮圖 ~4 MB（實測底圖 618–760 KB × 最多 6 張、上游無縮圖參數）：A 案建置期產 256px webp／B 案 IntersectionObserver 延後載入，取捨不同故不自決。
