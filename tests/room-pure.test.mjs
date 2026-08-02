@@ -2,7 +2,16 @@
 // 釘 room client 純輔助（room.js 環境相依、無法直接 import → 抽出的計算在此覆蓋）：
 //  backoffDelay（指數退避上限）+ sanitizeJoinCode（房號淨化）。
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import RP from '../js/room-pure.js';
+
+// assert 呼叫點計數（供 AGENTS.md 的 TEST-BASELINE 標記機械比對）。刻意數「原始碼裡的呼叫點」
+// 而非「執行次數」：後者會被資料驅動迴圈放大，地圖資料改版就讓基線變動＝假紅燈。
+// 也刻意不印寫死的字面量——那等於讓 gate 比對兩個常數，正是這道閘要防的漂移。
+const A = 'assert';
+const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
 // ── backoffDelay：1,2,4,8,16→clamp 15s（retries clamp 4）──
 assert.equal(RP.backoffDelay(0), 1000, 'retries0 → 1s');
@@ -27,4 +36,4 @@ assert.equal(RP.sanitizeDisplayName('喵'.repeat(30)), '喵'.repeat(24), '超長
 assert.equal(RP.sanitizeDisplayName('   '), '', '純空白 → 空（＝未設定，回預設名）');
 assert.equal(RP.sanitizeDisplayName(null), '', 'null → 空字串');
 
-console.log('room-pure: all assertions passed');
+console.log(`room-pure: ${asserts} assertions passed`);

@@ -2,7 +2,16 @@
 // 釘 treasure-core.js 座標換算 + 路線優化的 golden 行為。
 // 演算法移植自 cycleapple/xiv-tc-treasure-finder；移植當下另跑過 reference parity check（見 commit 說明）。
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import TC from '../js/treasure-core.js';
+
+// assert 呼叫點計數（供 AGENTS.md 的 TEST-BASELINE 標記機械比對）。刻意數「原始碼裡的呼叫點」
+// 而非「執行次數」：後者會被資料驅動迴圈放大，地圖資料改版就讓基線變動＝假紅燈。
+// 也刻意不印寫死的字面量——那等於讓 gate 比對兩個常數，正是這道閘要防的漂移。
+const A = 'assert';
+const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} ≈ ${b}`);
 
@@ -71,4 +80,4 @@ assert.equal(TC.formatGameCoord('庫爾札斯西部高地', { x: 21, y: 14 }), '
 assert.equal(TC.formatGameCoord('紅玉海', { x: 8.5, y: 30.25 }), '紅玉海 ( 8.5 , 30.3 )', '小數四捨五入到一位');
 assert.equal(TC.formatGameCoord('', { x: 1, y: 2 }), ' ( 1.0 , 2.0 )', '無地名不炸（仍給座標）');
 
-console.log('treasure-core: all assertions passed');
+console.log(`treasure-core: ${asserts} assertions passed`);

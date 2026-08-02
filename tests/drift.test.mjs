@@ -3,13 +3,21 @@
 //  1. 裁切卡尺寸 DIG_W/DIG_H(app.js) 與 --dig-w/--dig-h(styles.css) 必須同值（漂移→pin 偏離挖掘點）
 //  2. maps.json 每筆 image 必為 https:// 且不含 url() 危險字元（前端以字串拼 backgroundImage=url("...")）
 //  3. styles.css 定義的每個 .tre-* class 都要在 index.html/js 有引用（擋死 CSS 累積）
+//  4. 每個頂層 tracked 項目都已列入 deploy-allow / deploy-deny（把 CF build 期的分類閘提前到 commit 前）
 import assert from 'node:assert/strict';
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
+
+// assert 呼叫點計數（供 AGENTS.md 的 TEST-BASELINE 標記機械比對）。刻意數「原始碼裡的呼叫點」
+// 而非「執行次數」：後者會被資料驅動迴圈放大，地圖資料改版就讓基線變動＝假紅燈。
+// 也刻意不印寫死的字面量——那等於讓 gate 比對兩個常數，正是這道閘要防的漂移。
+const A = 'assert';
+const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
 const appJs = read('js/app.js');
 const modalJs = read('js/app-modal.js');
@@ -71,4 +79,37 @@ const usedAsToken = (cls) => new RegExp('(?<![a-z0-9_-])' + cls + '(?![a-z0-9_-]
 const dead = [...defined].filter((cls) => !usedAsToken(cls));
 assert.deepEqual(dead, [], `發現死 CSS class（styles.css 定義但無人以完整 token 引用）：${dead.join(', ')}`);
 
-console.log('drift: all assertions passed');
+// ── 4. 部署分類閘：每個頂層 tracked 項目都必須已歸類 ──
+// deploy-prepare.sh 的分類閘只在 CF build 期跑 → 新增頂層檔會 push 成功、但 build 失敗、
+// 站台從此靜默停在舊版（fail-closed 保住不外洩，代價是沒人發現沒更新）。這裡把同一個
+// 判斷提前到 commit 前：未分類就在本機紅，不必等 CF 的 build 失敗信。
+const allow = new Set(read('deploy-allow.txt').split('\n').map((s) => s.trim()).filter(Boolean));
+const deny = new Set(read('deploy-deny.txt').split('\n').map((s) => s.trim()).filter(Boolean));
+
+// 腳本裡「固定略過」的兩組 case 樣式（$OUT/$ALLOW/$DENY 變數展開成實際值）——解析而非抄寫，
+// 腳本改了這裡就跟著改，不會變成第二份會漂的清單。
+const prep = read('deploy-prepare.sh');
+const skip = new Set(
+  [...prep.matchAll(/^\s*([^)\n]*\|[^)\n]*)\)\s*continue\s*;;/gm)]
+    .flatMap((m) => m[1].split('|'))
+    .map((s) => s.trim().replace(/^"|"$/g, ''))
+    .map((s) => ({ $OUT: '_site', $ALLOW: 'deploy-allow.txt', $DENY: 'deploy-deny.txt' })[s] ?? s)
+    .filter(Boolean),
+);
+assert.ok(skip.has('_site') && skip.has('node_modules'), 'deploy-prepare.sh 的固定略過清單解析失敗（case 樣式可能已改寫）');
+
+const topLevel = new Set(
+  execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
+    .split('\n').map((s) => s.trim()).filter(Boolean)
+    // git 對非 ASCII 檔名會加引號（core.quotepath），取頂層時先剝掉
+    .map((f) => f.replace(/^"|"$/g, '').split('/')[0]),
+);
+const unclassified = [...topLevel].filter((e) => !allow.has(e) && !deny.has(e) && !skip.has(e));
+assert.deepEqual(unclassified, [], `頂層項目未分類（CF build 會 fail-closed 擋下、站台停在舊版）：${unclassified.join(', ')} → 站台資產加進 deploy-allow.txt、內部資產加進 deploy-deny.txt`);
+
+// allow 先於 deny 比對且無 else（deploy-prepare.sh:55-56）→ 同名時 deny 永遠碰不到。
+// 現況無交集，這條是擋未來把內部資產誤寫進 allow 又以為 deny 擋得住。
+const both = [...allow].filter((e) => deny.has(e));
+assert.deepEqual(both, [], `同一項目同時列在 allow 與 deny（腳本 allow 先判 → deny 形同無效）：${both.join(', ')}`);
+
+console.log(`drift: ${asserts} assertions passed`);
