@@ -100,6 +100,16 @@ function applyOp(points, op) {
 // 單房 WS 連線是否已達軟上限（純函式 → 單元測試釘邊界；Room.fetch 以 getWebSockets().length 呼叫）。
 function roomFull(wsCount) { return wsCount >= MAX_CONN; }
 
+// ── /room/:code 的公開路由閘（兩層守衛，2026-08-01 健檢實證的授權破口）──
+// 原本 default fetch 對 /room/:code **不分 method** 原封轉發到 DO，而 Room.fetch 對任何非 WS 的
+// POST 一律當建房 seed → 外部一行 `curl -X POST .../room/ABCDEF`（無 Origin、空 body、text/plain
+// 因而無 preflight）即可把全隊清單整份覆蓋成空、並重設 6h alarm，而且該分支**不廣播** →
+// 線上 client 停在舊清單，直到下一個 op 才「全隊點突然消失」。門檻只有 6 碼房號（會出現在
+// 邀請連結與截圖）。這繞過 origin 白名單、繞過 confirmModal、也繞過 op-based「不整份覆蓋」的架構鐵則。
+// 修法刻意做兩層（任一層日後被改動，另一層仍在）：
+function publicRoomMethodAllowed(method) { return method === "GET"; }   // WS 升級握手本身就是 GET
+function isSeedRequest(pathname) { return pathname === "/seed"; }        // 僅內部 stub.fetch("https://do/seed")
+
 function rateLimited(map, key, max, windowMs) {
   if (!key) return false;
   const now = Date.now();
@@ -159,6 +169,8 @@ export default {
 
       const code = (parts[1] || "").toUpperCase();
       if (!/^[0-9A-Z]{6}$/.test(code)) return json({ error: "bad_code" }, 400, req);
+      // 守衛第一層：只有 GET 快照與 WS 升級可直達 DO；seed 只走內部通道（見 publicRoomMethodAllowed 註解）
+      if (!publicRoomMethodAllowed(req.method)) return json({ error: "method_not_allowed" }, 405, req);
       return env.ROOM.get(env.ROOM.idFromName(code)).fetch(req);
     } catch (e) {
       console.error("worker fetch error:", (e && e.stack) || e);
@@ -209,7 +221,11 @@ export class Room {
       this.broadcastOnline();
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
-    if (req.method === "POST") {   // 建房 seed
+    if (req.method === "POST") {   // 建房 seed（僅限內部 stub.fetch("https://do/seed")）
+      // 守衛第二層：DO 不看 pathname 的話，外部 POST /room/:code 會走進這個整份覆蓋分支
+      if (!isSeedRequest(new URL(req.url).pathname)) {
+        return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      }
       const body = await req.json().catch(() => ({}));
       let seedPoints = [];
       if (body && body.state) {
@@ -271,4 +287,4 @@ export class Room {
 // 會讓整支 worker 起不來（`Incorrect type for map entry 'MAX_CONN': not of type 'function or ExportedHandler'`）
 // → `wrangler dev` 直接掛掉、本地無法端到端測。常數改以 getter 導出（2026-07-30 B-004）。
 function maxConn() { return MAX_CONN; }
-export { applyOp, validatePoint, validateState, originAllowed, genCode, normalizePoint, roomFull, maxConn };
+export { applyOp, validatePoint, validateState, originAllowed, genCode, normalizePoint, roomFull, maxConn, publicRoomMethodAllowed, isSeedRequest };

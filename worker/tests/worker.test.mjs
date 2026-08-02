@@ -2,7 +2,16 @@
 // 守 op-based 房間核心：applyOp / validatePoint / validateState / genCode / originAllowed。
 // 重點：證明「並發加點不互蓋」— DO 單執行緒序列呼叫 applyOp，兩人各加一點都保留。
 import assert from 'node:assert/strict';
-import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, maxConn } from '../src/index.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, maxConn, publicRoomMethodAllowed, isSeedRequest } from '../src/index.js';
+
+// assert 呼叫點計數（供 AGENTS.md 的 TEST-BASELINE 標記機械比對）。刻意數「原始碼裡的呼叫點」
+// 而非「執行次數」：後者會被資料驅動迴圈放大，地圖資料改版就讓基線變動＝假紅燈。
+// 也刻意不印寫死的字面量——那等於讓 gate 比對兩個常數，正是這道閘要防的漂移。
+const A = 'assert';
+const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
 const P = (o = {}) => ({ key: 'u1:1.0', owner: 'u1', ownerName: '貓', map: 4, x: 20, y: 20, item: 6688, ...o });
 
@@ -90,4 +99,16 @@ assert.equal(roomFull(31), false, '31 連線未滿（放行第 32）');
 assert.equal(roomFull(32), true, '32 連線已滿（拒第 33）');
 assert.equal(roomFull(64), true, '超量已滿');
 
-console.log('worker(treasure-room): all assertions passed');
+// ── 公開路由閘：/room/:code 只准 GET 與 WS 升級（2026-08-01 健檢實證的授權破口）──
+// 破口原樣：default fetch 對 /room/:code 不分 method 原封轉發 → 外部 POST 直達 Room.fetch
+// 的 seed 分支，無 origin 檢查即整份覆蓋權威清單、重設 6h 期限，且**不廣播**（線上實測回 200、點被清空）。
+// 兩層守衛：① 這裡擋 method ② isSeedRequest 擋路徑（seed 僅限內部 stub.fetch("https://do/seed")）。
+assert.equal(publicRoomMethodAllowed('GET'), true, 'GET 放行（WS 升級握手本身就是 GET）');
+assert.equal(publicRoomMethodAllowed('POST'), false, '外部 POST /room/:code 拒 — 這正是被實證的覆蓋破口');
+assert.equal(publicRoomMethodAllowed('PUT'), false, 'PUT 拒');
+assert.equal(publicRoomMethodAllowed('DELETE'), false, 'DELETE 拒');
+assert.equal(isSeedRequest('/seed'), true, '內部 seed 通道認得');
+assert.equal(isSeedRequest('/room/ABCDEF'), false, '外部路徑不得當 seed（第二層守衛）');
+assert.equal(isSeedRequest('/seed/x'), false, '前綴偽裝拒');
+
+console.log(`worker(treasure-room): ${asserts} assertions passed`);
