@@ -27,4 +27,4 @@ Disallow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://ffxiv-tw-treasure.pages.dev/sitemap.xml
+Sitemap: https://treasure.xivtc.com/sitemap.xml

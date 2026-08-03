@@ -2,7 +2,7 @@
 
 選等級 → 選地圖 → 比對謎題圖找挖寶座標。繁中服（陸行鳥 DC）藏寶圖挖掘點查詢工具。
 
-**Pages URL**：https://ffxiv-tw-treasure.pages.dev/
+**Pages URL**：https://treasure.xivtc.com/
 
 ---
 
