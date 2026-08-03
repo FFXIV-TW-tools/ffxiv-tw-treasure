@@ -42,13 +42,13 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 
 ## VERIFY（改動後必跑）
 
-> 測試基線 **4 套全綠 · 96 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 52；`npm test` exit 0；**只准升不准降**；2026-08-01 R3 健檢輪實測）。
+> 測試基線 **4 套全綠 · 100 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 56；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒）。
 > 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
-<!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="52" -->
+<!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="56" -->
 
 ```bash
 npm test   # 串四套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）

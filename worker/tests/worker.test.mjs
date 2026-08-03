@@ -92,6 +92,13 @@ assert.ok(!originAllowed(mk('https://evil.pages.dev')), '他站 pages.dev 拒');
 assert.ok(!originAllowed(mk('https://ffxiv-tw-treasure.pages.dev.evil.com')), '前綴偽裝拒');
 assert.ok(!originAllowed(mk('')), '無 Origin header 拒（POST /room 無 Origin → 403）');
 
+// B-047：遷 xivtc.com 期間的**雙列**契約（上面已斷言舊網域仍 OK，這裡補新網域那一半）。
+// 漏新的 ⇒ treasure.xivtc.com 的房間全滅；漏舊的 ⇒ 舊書籤使用者當場斷線。
+assert.ok(originAllowed(mk('https://treasure.xivtc.com')), '新正式站 treasure.xivtc.com OK');
+assert.ok(!originAllowed(mk('https://unknown.xivtc.com')), '未列舉的 xivtc 子網域拒（精確 host，非萬用）');
+assert.ok(!originAllowed(mk('https://xivtc.com')), 'apex 拒');
+assert.ok(!originAllowed(mk('https://treasure.xivtc.com.evil.com')), '後綴偽裝拒');
+
 // roomFull：單房 WS 連線軟上限邊界（MAX_CONN=32；達 32 拒第 33 條）
 assert.equal(maxConn(), 32, 'MAX_CONN=32（以 getter 導出：workerd 拒收裸值導出，會讓 wrangler dev 起不來）');
 assert.equal(roomFull(0), false, '0 連線未滿');

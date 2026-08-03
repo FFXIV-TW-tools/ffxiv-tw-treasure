@@ -22,7 +22,10 @@ function originAllowed(req) {
   const o = req.headers.get("Origin") || "";
   return /^https?:\/\/localhost(:\d+)?$/.test(o) ||
          /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(o) ||
-         /^https:\/\/([a-z0-9-]+\.)?ffxiv-tw-treasure\.pages\.dev$/.test(o);
+         /^https:\/\/([a-z0-9-]+\.)?ffxiv-tw-treasure\.pages\.dev$/.test(o) ||
+         // B-047：遷 xivtc.com 期間新舊雙列，舊條目在遷移完成前不得移除。
+         // ⚠ 精確 host、不加 `([a-z0-9-]+\.)?` —— 那會放行任意 *.xivtc.com 跨域讀寫他人房間。
+         /^https:\/\/treasure\.xivtc\.com$/.test(o);
 }
 
 // 單一挖掘點驗證（擋畸形 / 欄位污染）
