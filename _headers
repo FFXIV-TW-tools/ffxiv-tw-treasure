@@ -23,3 +23,13 @@
 # 生成資料 JSON — 短 cache + revalidate（版本變動由 ETag 抓出）
 /data/*
   Cache-Control: public, max-age=0, must-revalidate
+
+# HTML 入口：預先宣告 portal CDN 資產。head 用 `document.write` 注入它們（刻意的——parser-inserted defer
+# script 才保證 settings-client.js 在工具主程式前執行）⇒ URL 執行期才組出來、preload scanner 看不到。
+# 用 HTTP 標頭而非 HTML 標籤：標頭在 HTML 開始解析前就被處理；本機 dev server 不套 `_headers` ⇒ 只在線上生效。
+# ⚠️ `as` 必須與實際載入方式一致（style／script），錯了會抓兩次；皆非 CORS 載入故不加 crossorigin。
+# 詳解（含 2026-08-04 A/B 實測數據）見 ../ffxiv-tw-macro-builder/_headers。本站不注入 version-check.js，故不列。
+/
+  Link: <https://xivtc.com/tokens.css>; rel=preload; as=style, <https://xivtc.com/header.css>; rel=preload; as=style, <https://xivtc.com/header.js>; rel=preload; as=script, <https://xivtc.com/settings-client.js>; rel=preload; as=script
+/index.html
+  Link: <https://xivtc.com/tokens.css>; rel=preload; as=style, <https://xivtc.com/header.css>; rel=preload; as=style, <https://xivtc.com/header.js>; rel=preload; as=script, <https://xivtc.com/settings-client.js>; rel=preload; as=script
