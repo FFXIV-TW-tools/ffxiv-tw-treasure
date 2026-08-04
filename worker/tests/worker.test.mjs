@@ -118,4 +118,32 @@ assert.equal(isSeedRequest('/seed'), true, '內部 seed 通道認得');
 assert.equal(isSeedRequest('/room/ABCDEF'), false, '外部路徑不得當 seed（第二層守衛）');
 assert.equal(isSeedRequest('/seed/x'), false, '前綴偽裝拒');
 
+// ── 心跳 auto-response 跨檔漂移哨兵（2026-08-04 額度事故）──────────────────
+//
+// client 每 25s 送 `{"t":"ping"}`。若 DO 沒有註冊 auto-response，那一幀會叫醒 hibernate 中的
+// DO 並計費（3,456 次/日/連線）；若註冊了但字串與 client 不符，runtime 比對不到、一樣叫醒 DO。
+// **兩種失敗都零功能訊號**：pong 照樣回（fallback 分支還在）、房間照常同步、所有測試照樣綠，
+// 只有帳單悄悄回去。所以這裡守的是「有註冊」＋「兩邊字串一致」。
+//
+// 刻意做成**跨檔比對**而不是各自寫死字面量：寫死等於讓兩個常數互相比對，
+// 而真正會漂的正是「有人改了 client 的幀格式卻沒動 worker」。
+{
+  const workerSrc = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+  const clientSrc = readFileSync(new URL('../../js/room.js', import.meta.url), 'utf8');
+
+  assert.match(workerSrc, /setWebSocketAutoResponse\(/,
+    'DO 建構子必須註冊 WebSocket auto-response —— 否則每次心跳都叫醒 DO 並計費（3,456 次/日/連線）');
+
+  // client 送出的心跳鍵值（send(JSON.stringify(op)) → 取 `send({ t: 'ping' })` 的物件字面量）
+  const clientPing = clientSrc.match(/send\(\s*\{\s*t:\s*'([a-z]+)'\s*\}\s*\)/);
+  assert.ok(clientPing, 'js/room.js 找不到心跳送出點（解析失效即無法比對，不可當通過）');
+
+  // worker auto-response 註冊的 request 物件（JSON.stringify({ t: "ping" })）
+  const workerPing = workerSrc.match(/setWebSocketAutoResponse\([\s\S]*?JSON\.stringify\(\{\s*t:\s*"([a-z]+)"\s*\}\)/);
+  assert.ok(workerPing, 'worker 的 auto-response request 必須由 JSON.stringify 產生（手寫字面量易因空白差異靜默失配）');
+
+  assert.equal(workerPing[1], clientPing[1],
+    `auto-response 比對的幀（${workerPing[1]}）必須與 client 送出的幀（${clientPing[1]}）一致 —— 不一致＝runtime 比對不到、照樣叫醒 DO，而且零訊號`);
+}
+
 console.log(`worker(treasure-room): ${asserts} assertions passed`);

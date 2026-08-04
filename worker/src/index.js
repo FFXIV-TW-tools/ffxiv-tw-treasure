@@ -187,6 +187,35 @@ export class Room {
     this.ctx = ctx;
     this.env = env;
     this._opRate = new WeakMap();   // per-socket op 速率窗
+
+    /**
+     * 心跳交給 runtime 自動回應，**不要叫醒 DO**（2026-08-04 額度事故）。
+     *
+     * 【問題】client 每 25 秒送一次應用層 `{"t":"ping"}`（js/room.js startHeartbeat）。
+     * 那是 **data frame 不是協定層 control frame** ⇒ 每一次都呼叫 `webSocketMessage`、
+     * 叫醒 hibernate 中的 DO 並計費。一個開著的房間分頁＝3,456 次/日，而尋寶房大多數時間
+     * 是閒置的（大家在跑圖，不是持續改點位）⇒ 這條心跳就是本 DO 請求量的主體。
+     *
+     * 【為什麼不能改用協定層 ping】瀏覽器的 WebSocket API **沒有送 ping frame 的介面**，
+     * client 端不可能改。runtime 只自動回應協定層 ping，幫不到應用層心跳。
+     *
+     * 【解法】官方文件原文："If a request is received matching the provided request then the
+     * auto-response will be returned without waking WebSockets in hibernation and incurring
+     * billable duration charges."
+     *
+     * ⚠️ **本站的心跳幀是 `{"t":"ping"}`（短鍵 `t`），與 mit-planner 的 `{"type":"ping"}` 不同。**
+     *    auto-response 是逐字節精確比對——照抄鄰站的字串會靜默失配（帳單照舊、功能完全正常、
+     *    零訊號）。故這裡用 `JSON.stringify` 從與 client 相同的物件產生，不寫字面量。
+     * ⚠️ 設了之後 `webSocketMessage` 再也收不到 ping ⇒ 下方的 ping 分支變成 fallback；
+     *    保留它讓序列化方式不同的舊 client 仍拿得到 pong。
+     * ⚠️ client 的半開偵測（60s 沒收到 pong 就重連）不受影響——auto-response 照送 pong。
+     */
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair(
+        JSON.stringify({ t: "ping" }),
+        JSON.stringify({ t: "pong" }),
+      ),
+    );
   }
 
   online() { return this.ctx.getWebSockets().length; }
