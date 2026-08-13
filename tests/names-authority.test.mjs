@@ -21,11 +21,17 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DICT = join(process.env.FFXIV_PROJECT_ROOT || 'C:/FFXIVProject', 'data', 'item_dict');
-const SQLITE = join(DICT, 'item_lookup.sqlite');
+/* ⚠️ 權威源刻意是**原始解包 CSV**，不是 `item_lookup.sqlite` 的 `name_tc` 欄。
+   2026-08-13 查證：`XIVDiscordBot/scripts/enrich_item_dict.py` 的 `_resolve_name_tc()` 優先序是
+   「官方 TC → TNZE → **OpenCC 簡→繁 fallback**」，而 sqlite **沒有記錄每一筆走了哪條**
+   （`_name_source()` 算得出 dt/tnze/opencc，卻沒存進任何欄位）。
+   ⇒ `name_tc` 是「官方名與機轉名的混合物，且從消費端分不出來」。拿它當權威源，
+   等於讓本哨兵繼承同一個歧義——它要守的正是「顯示名不是機器轉換」。
+   直接讀 `tc_Item.csv` 就沒有這個問題：那是台服 client 解包，沒有 fallback 摻進來。 */
+const TC_CSV = join(DICT, 'datamining_tc', 'tc_Item.csv');
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -47,30 +53,49 @@ ok(Array.isArray(grades) && grades.length > 0, 'grades.json 應有內容');
 }
 
 // ── ② 逐筆核對：站上的每一個名字都必須等於解包原文 ──────────────────────
-ok(existsSync(SQLITE),
-  `找不到權威源 ${SQLITE}——本檔刻意不 skip：拿不到答案時「跳過」在 CI 上與「通過」無法區分，`
+ok(existsSync(TC_CSV),
+  `找不到權威源 ${TC_CSV}——本檔刻意不 skip：拿不到答案時「跳過」在 CI 上與「通過」無法區分，`
   + '而這條守的正是「有沒有真的對過答案」。跨機請設 FFXIV_PROJECT_ROOT。');
 
-const ids = grades.map((g) => g.itemId).filter(Boolean);
-const sql = `SELECT id, name_tc FROM items WHERE id IN (${ids.join(',')});`;
+/* 逐字元 CSV 解析。⚠️ **不要用 `split('\n')`**：`Description` 欄位內含換行，引號內的換行
+   不是換行 ⇒ 整份資料錯位，症狀是「id 明明在檔裡卻查不到」（2026-08-13 實際踩到，
+   而且那個假結論差點被寫成「這些地圖名無法多語化」）。同理不要寫死表頭列號：
+   `tc_*` 是三列前導（key／欄名／offset），`en_*`／`ja_*` 只有一列。 */
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cur); cur = ''; }
+    else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (ch !== '\r') cur += ch;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
 let rows;
 try {
-  // 用 python 讀 sqlite：本 repo 無 node sqlite 相依，而產生器本來就是 python（不新增相依）
-  const out = execFileSync('python', ['-c',
-    'import sqlite3,sys,json;sys.stdout.reconfigure(encoding="utf-8");'
-    + `c=sqlite3.connect(r"${SQLITE.replace(/\\/g, '/')}");`
-    + `print(json.dumps(dict((str(i),t) for i,t in c.execute(${JSON.stringify(sql)}))))`,
-  ], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
-  rows = JSON.parse(out);
+  const csv = parseCsv(readFileSync(TC_CSV, 'utf8'));
+  let h = -1;
+  for (let r = 0; r < 3; r++) if (csv[r] && (csv[r].includes('Name') || csv[r].includes('Singular'))) { h = r; break; }
+  ok(h >= 0, 'tc_Item.csv 找不到欄名列（dump 格式變了？）');
+  let ni = csv[h].indexOf('Name'); if (ni < 0) ni = csv[h].indexOf('Singular');
+  const start = h === 0 ? 1 : h + 2;
+  rows = {};
+  for (let i = start; i < csv.length; i++) { const c = csv[i]; if (c && c[0]) rows[c[0]] = (c[ni] || '').trim(); }
+  // 解析健全性：13 筆全查不到多半是解析壞了而不是資料沒有 —— 那正是上面警告的失效模式
+  ok(Object.keys(rows).length > 10000, `tc_Item.csv 只解析出 ${Object.keys(rows).length} 列，解析器可能壞了`);
 } catch (e) {
-  assert.fail(`讀不到 item_lookup.sqlite（${e.message.slice(0, 200)}）——同上，不得當成通過`);
+  assert.fail(`讀不到 ${TC_CSV}（${e.message.slice(0, 200)}）——同上，不得當成通過`);
 }
 
 const bad = [];
 for (const g of grades) {
   const authoritative = rows[String(g.itemId)];
   if (!authoritative) { bad.push(`${g.grade}(item ${g.itemId})：解包源查無此 id`); continue; }
-  if (g.name !== authoritative) bad.push(`${g.grade}：站上「${g.name}」≠ 解包「${authoritative}」`);
+  if (g.name !== authoritative) bad.push(`${g.grade}：站上「${g.name}」≠ 台服解包「${authoritative}」`);
 }
 assert.deepStrictEqual(bad, [], '⚠️ 站上顯示的名稱與台服解包不符：\n  ' + bad.join('\n  '));
 n++;
