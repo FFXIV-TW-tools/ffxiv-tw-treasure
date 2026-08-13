@@ -51,10 +51,21 @@ TEAMCRAFT_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcr
                  'staging/libs/data/src/lib/json/treasures.json')
 
 # 社群分級（高→低）：itemId → (grade 標籤, 版本)。繁中名不寫這裡，從 item_lookup 生成。
-# G18/46185 暫不列。⚠️ 2026-08-13 複核：原因寫的是「繁中名未進 item_lookup」，**現在已經進了**
-# （name_tc =「陳舊的卡岡圖亞革地圖」）⇒ 這條理由已失效。要不要補 G18 是**內容決策**（還需確認
-# Teamcraft 是否有它的點位），不在本次「正名」範圍內，留給 Owner。
+#
+# ⚠️ **G18/46185 列在表內但目前不會出貨** —— 台服尚未收錄該物品。
+# 2026-08-13 兩次更正，值得完整記下來因為第一次的更正本身也是錯的：
+#   · 原本的排除理由寫「繁中名未進 item_lookup」
+#   · 當天稍早我複核成「已經進了（name_tc =『陳舊的卡岡圖亞革地圖』）⇒ 理由失效」——**錯**
+#   · 真相：`item_lookup.name_tc_source` 這一欄（同日新增）標的是 **`opencc`**。
+#     台服解包 `tc_Item.csv` 與 `tclocal_Item.csv` 的 46185 **都是空字串**，
+#     那個名字是国服「陈旧的卡冈图亚革地图」機器轉繁的產物。
+# ⇒ 教訓：**「item_lookup 有繁中名」不等於「台服有這個名字」**。這一欄存在之前，
+#   兩者在資料上長得一模一樣，我就是這樣看錯的。本檔因此改為只收 `name_tc_source='dump'`。
+# ⇒ 它留在表內是為了**台服開放當天自動出貨**（解包一有名字就過閘），不需要再改這裡。
+#   順帶佐證台服命名慣例其實是統一的：官方用編號式（陳舊的地圖G17），
+#   国服才用皮名（陈旧的狞豹革地图）——我先前寫「台服命名並不統一」同樣是被機轉名誤導。
 GRADE_CATALOG = [
+    (46185, 'G18', '7.4'),
     (43557, 'G17', '7.0'), (43556, 'G16', '7.0'),
     (39591, 'G15', '6.3'), (36612, 'G14', '6.0'), (36611, 'G13', '6.0'),
     (26745, 'G12', '5.0'), (26744, 'G11', '5.0'),
@@ -62,6 +73,8 @@ GRADE_CATALOG = [
     (12243, 'G8', '3.0'), (12242, 'G7', '3.0'), (12241, 'G6', '3.0'),
 ]
 GRADE_ITEMIDS = {iid for iid, _, _ in GRADE_CATALOG}
+# 實際出貨的等級數地板（只准升不准降）。目前 13＝全表 14 扣掉台服未收錄的 G18。
+SHIPPED_GRADE_FLOOR = 13
 
 
 def fetch_treasures():
@@ -91,10 +104,14 @@ def load_local():
     with open(os.path.join(DICT, 'lspl', 'aetherytes.json'), encoding='utf-8') as f:
         aeth = json.load(f)              # [{map, x, y, type, ...}]（與 marketboard build_gathering_nodes 同一份）
     conn = sqlite3.connect(os.path.join(DICT, 'item_lookup.sqlite'))
-    rows = {iid: conn.execute('SELECT name_tc FROM items WHERE id=?', (iid,)).fetchone() for iid in GRADE_ITEMIDS}
+    rows = {iid: conn.execute('SELECT name_tc, name_tc_source FROM items WHERE id=?',
+                              (iid,)).fetchone() for iid in GRADE_ITEMIDS}
     conn.close()
-    # 繁中名 = 台服解包原文（name_tc）。**不做任何轉換**——見檔頭 2026-08-13 更正。
-    names = {iid: (row[0] if row and row[0] else None) for iid, row in rows.items()}
+    # 繁中名 = 台服解包原文。**只收 `name_tc_source='dump'`**，其餘（opencc／tnze）一律當作沒有。
+    # ⚠️ 光看 `name_tc` 有值是不夠的 —— G18 就是有值（機轉自国服名）而台服解包裡是空的。
+    # 這一欄之前不存在，兩種情況在資料上完全無法區分，那正是 2026-08-13 誤判的成因。
+    names = {iid: (row[0] if row and row[0] and row[1] == 'dump' else None)
+             for iid, row in rows.items()}
     return places, maps, names, aeth
 
 
@@ -103,22 +120,33 @@ def main():
     raw = fetch_treasures()
     places, maps, names, aeth_raw = load_local()
 
-    # 只收 GRADE_CATALOG 內的 itemId（玩家實際使用的可採集等級；舊 ARR/特殊圖點位不 surface）
-    pts = [t for t in raw if t.get('item') in GRADE_ITEMIDS]
-    used_maps = sorted({t['map'] for t in pts})
-
-    gaps = []
-
-    # grades.json
-    grades = []
+    # grades.json —— **台服解包沒有名字的等級一律不出貨**（fail-closed）。
+    # 不是「先放上去、名字之後補」：站上顯示的名字是玩家拿回遊戲內搜尋用的，
+    # 沒有官方名時任何替代品（機轉／英文／自創）都會讓他搜不到，而畫面上完全正常。
+    grades, pending = [], []
     for iid, grade, exp in GRADE_CATALOG:
         name = names.get(iid)
         if not name:
-            gaps.append(f'grade {grade}(item {iid}) 無繁中名')
-        psize = next((t.get('partySize') for t in pts if t['item'] == iid), None)
+            pending.append(f'{grade}(item {iid})')
+            continue
+        psize = next((t.get('partySize') for t in raw if t.get('item') == iid), None)
         grades.append({'grade': grade, 'itemId': iid, 'name': name,
                        'partySize': psize, 'expansion': exp,
                        'special': grade == '綠圖'})
+    if pending:
+        print(f'· 台服尚未收錄、暫不出貨：{"、".join(pending)}（解包一有名字就會自動出現）')
+    # 只准升不准降的地板：某次 dump 壞掉／欄位改名會讓上面那圈**靜默**掃掉一整批等級，
+    # 而輸出仍是合法 JSON、站台照常運作，只是少了幾個分頁。地板讓它當場失敗。
+    if len(grades) < SHIPPED_GRADE_FLOOR:
+        print(f'✗ 只產出 {len(grades)} 個等級，低於地板 {SHIPPED_GRADE_FLOOR}'
+              '（dump 壞了？欄位改名？）', file=sys.stderr)
+        sys.exit(1)
+
+    shipped = {g['itemId'] for g in grades}
+    pts = [t for t in raw if t.get('item') in shipped]
+    used_maps = sorted({t['map'] for t in pts})
+
+    gaps = []
 
     # maps.json（enriched：繁中地名 + size_factor + 貼圖 URL）
     out_maps = {}

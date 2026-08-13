@@ -7,7 +7,6 @@
 //   理由寫的是「name_tc 對藏寶圖物品是通用『地圖Gxx』錯名」。逐筆對台服解包核對後那個前提是錯的：
 //     · `item_lookup.name_tc` 與 `datamining_tc/tc_Item.csv` 逐字相同（43557 → 陳舊的地圖G17）
 //     · 日服官方同樣是編號式（`ja_Item` → 古ぼけた地図G17）；**只有英文**用生物皮名
-//     · 台服命名並不統一：G18 的官方名就是「陳舊的卡岡圖亞革地圖」＝有正式皮名
 //   ⇒「地圖Gxx」不是佔位符，是台服客戶端真正的名字。站上原本顯示的皮名**在台服 client 裡不存在**
 //     ⇒ 玩家拿它回遊戲內搜尋會找不到，而畫面上完全看不出有問題（名字讀起來非常合理）。
 //
@@ -46,10 +45,58 @@ ok(Array.isArray(grades) && grades.length > 0, 'grades.json 應有內容');
   ok(!/opencc|OpenCC|_S2T|s2twp/.test(code),
     '⚠️ build-data.py 的**程式碼**不得出現 opencc／s2twp —— 那是国服名經機器轉換，'
     + '不是台服官方名（Owner 2026-08-13：一律使用解包名稱）');
-  ok(/SELECT name_tc FROM items/.test(code),
+  ok(/SELECT name_tc(?:, name_tc_source)? FROM items/.test(code),
     'build-data.py 必須直接取 name_tc（台服解包原文）');
   ok(!/SELECT name_sc FROM items/.test(code),
     'build-data.py 不得取 name_sc（那是国服名）');
+
+  /* ⚠️ **「name_tc 有值」不等於「台服有這個名字」** —— 2026-08-13 補課。
+     當天稍早我把 G18 的排除理由判成「已失效，item_lookup 現在有繁中名了」，
+     而那個名字（「陳舊的卡岡圖亞革地圖」）是国服「陈旧的卡冈图亚革地图」機轉來的：
+     台服 `tc_Item.csv` 與 `tclocal_Item.csv` 的 46185 **都是空字串**。
+     兩者在 `name_tc` 這一欄長得一模一樣，是同日新增的 `name_tc_source` 才分得出來。
+     ⇒ 產生器必須用來源欄過濾，否則下一個人會再犯一次同樣的判斷。 */
+  ok(/name_tc_source/.test(code),
+    'build-data.py 必須讀 name_tc_source —— 只看 name_tc 有沒有值，會把機轉名當成官方名');
+  ok(/==\s*'dump'/.test(code) || /=== *'dump'/.test(code),
+    "必須只收 name_tc_source == 'dump'（opencc／tnze 一律當作沒有）");
+  /* ⚠️ 斷言要對準**比較與離開**，不是常數名字。初版寫 `/SHIPPED_GRADE_FLOOR/`，
+     突變測試當場證明它是空轉：把守衛改成 `if False:` 之後，錯誤訊息的 print 裡
+     仍留著那個名字 ⇒ 正則照樣命中、測試照樣綠。 */
+  ok(/if\s+len\(grades\)\s*<\s*SHIPPED_GRADE_FLOOR\s*:/.test(code),
+    '必須有出貨等級數地板的實際比較 —— dump 壞掉時上面那圈會**靜默**掃掉整批等級，'
+    + '輸出仍是合法 JSON、站台照常運作，只是少了幾個分頁');
+  ok(/SHIPPED_GRADE_FLOOR\s*=\s*(\d+)/.test(code)
+     && Number(RegExp.$1) >= grades.length,
+    `地板（${(code.match(/SHIPPED_GRADE_FLOOR\s*=\s*(\d+)/) || [])[1]}）不得低於目前出貨數 `
+    + `${grades.length} —— 地板低於現況等於沒有地板`);
+  /* ⚠️ 同上，範圍要夾住**這個守衛的區塊**。初版寫 `code.slice(indexOf(常數))` 再找
+     `sys.exit(1)`，突變證明它是空轉：把守衛裡的 exit 刪掉之後，後面 gaps 檢查那個 exit
+     仍在切片內 ⇒ 照樣命中。 */
+  // ⚠️ 不能用「下一個頂層敘述」切 —— 守衛在 `def main():` 裡面，直到檔尾都有縮排，
+  //    切出來的區塊會一路含到後面 gaps 檢查的那個 exit（第二次突變才抓到）。
+  //    正確做法是抓「縮排回到 <= if 本身」的第一行。
+  const guardLines = (code.split(/if\s+len\(grades\)\s*<\s*SHIPPED_GRADE_FLOOR\s*:\n/)[1] || '')
+    .split('\n');
+  const body = [];
+  for (const l of guardLines) {
+    if (l.trim() && (l.length - l.trimStart().length) <= 4) break;
+    body.push(l);
+  }
+  const block = body.join('\n');
+  ok(/sys\.exit\(1\)/.test(block),
+    '地板不達標必須在**該守衛區塊內**非零 exit（只印訊息＝CI 與人都會略過）');
+}
+
+// ── ①b 未出貨的等級不得混進資料檔 ───────────────────────────────────────
+// G18 留在 GRADE_CATALOG 是為了「台服開放當天自動出貨」，但在那之前它一個字都不該出現。
+{
+  const ids = new Set(grades.map((g) => g.itemId));
+  ok(!ids.has(46185),
+    '⚠️ G18(46185) 台服 client 尚未收錄（解包為空字串）——出貨它等於把機轉名放上站，'
+    + '玩家拿去遊戲內搜尋會找不到');
+  ok(grades.every((g) => g.name && g.name.trim()),
+    '出貨的等級不得有空名稱（fail-closed：沒有官方名就整筆不出）');
 }
 
 // ── ② 逐筆核對：站上的每一個名字都必須等於解包原文 ──────────────────────

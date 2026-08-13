@@ -58,6 +58,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
+<!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="20" -->
 
 ```bash
 npm test   # 串五套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）
@@ -66,7 +67,7 @@ node tests/core.test.mjs           # 座標換算 + 路線優化 golden（含 do
 node tests/room-pure.test.mjs      # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化 + sanitizeDisplayName 顯示名淨化
 node tests/drift.test.mjs          # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS（token 邊界比對）+ 頂層項目已分類（allow/deny 覆蓋、兩清單無交集）
 node worker/tests/worker.test.mjs  # 房間 applyOp/validate/originAllowed/roomFull/公開路由閘（含「並發加點不互蓋」證明）
-node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；權威源＝datamining_tc/tc_Item.csv **原始解包**，刻意不用 item_lookup.name_tc（那欄混了 OpenCC fallback 且沒記來源）；拿不到權威源一律失敗不 skip
+node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；權威源＝datamining_tc/tc_Item.csv **原始解包**，不用 item_lookup.name_tc（那欄混了 OpenCC fallback）；拿不到權威源一律失敗不 skip。⚠️ 2026-08-13 更正：`item_lookup` **現在有 `name_tc_source` 欄**（dump/dt/tnze/opencc），故產生器改為只收 `'dump'`——這一欄之前不存在，「有繁中名」與「台服真的有這個名字」在資料上完全無法區分，我就是這樣把 G18 誤判成「可以補了」（它的 name_tc 是国服名機轉，台服解包裡是空字串）。哨兵仍讀原始 CSV：那是**獨立於 sqlite 的第二個證人**，兩邊都錯才會漏
 
 py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
 cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 STOP 交 shawn 正式 deploy）
