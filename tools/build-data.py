@@ -6,7 +6,7 @@
 - 挖掘點 treasures：**Teamcraft** treasures.json（決策 #5，註明來源 Teamcraft）
 - 地圖 size_factor + 貼圖 URL：本地 data/item_dict/lspl/maps.json（Teamcraft maps 鏡像，map-id keyed）
 - 地區繁中名：本地 data/item_dict/place_names.json（**map-id keyed** — 已驗）
-- 物品繁中名：本地 data/item_dict/item_lookup.sqlite items.name_sc → s2twp（name_tc 對藏寶圖物品是通用「地圖Gxx」錯名，故取 name_sc 再簡→繁；決策 #1：權威生成，不硬編對照表）
+- 物品繁中名：本地 data/item_dict/item_lookup.sqlite items.**name_tc**（＝台服 client 解包原文，與 datamining_tc/tc_Item.csv 逐字相同）。**零轉換**——2026-08-13 更正，見下方長註解
 - 等級分級（Gxx / 綠圖 社群慣例 itemId↔grade）：GRADE_CATALOG（事實對照，繁中名仍從 sqlite 生）
 
 DRY 鐵則：所有繁中名走本地權威源，禁自建對照表。
@@ -27,14 +27,20 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-# 簡→繁：item_lookup 的 name_tc 對藏寶圖物品是通用「地圖Gxx」(錯)，name_sc 才是正確生物皮名。
-# 故繁中完整名 = s2twp(name_sc)，對齊 XIVDiscordBot/api/_textconv.py 的 S2T（DRY，非自建對照表）。
-try:
-    import opencc
-    _S2T = opencc.OpenCC('s2twp')
-except ImportError:
-    print('✗ 需要 opencc（簡→繁）。請用有裝 opencc 的 python 跑，例如：py -3.11 tools/build-data.py', file=sys.stderr)
-    sys.exit(1)
+# ⚠️ 2026-08-13 更正（Owner 裁示：「一律使用解包名稱，不要使用機器翻譯；若是機器翻譯要特別註明」）
+#
+# 本檔原本走 `s2twp(name_sc)`，理由寫的是「name_tc 對藏寶圖物品是通用『地圖Gxx』(錯)」。
+# **那個前提是錯的**——逐筆對台服 client 解包核對後：
+#   · `item_lookup.name_tc` 與 `datamining_tc/tc_Item.csv` **逐字相同**（43557 → 陳舊的地圖G17）
+#   · 日服官方也是同樣的編號式命名（`ja_Item` 43557 → 古ぼけた地図G17）
+#   · **只有英文**用生物皮名（`en_Item` → Timeworn Br'aaxskin Map）
+#   · 而且台服命名並不統一：G18(46185) 的 name_tc 就是「陳舊的卡岡圖亞革地圖」＝有正式皮名
+#   ⇒「地圖Gxx」不是佔位符，是台服客戶端真正的名字。原本顯示的皮名是**国服名經 OpenCC
+#      簡→繁轉出來的**，台服 client 裡並不存在 ⇒ 玩家拿站上的名字回遊戲內搜尋會找不到。
+#      這同時直踩 monorepo 鐵則「禁 OpenCC 机转（產国服譯名）／查證源＝台服解包」。
+# ⇒ 改用 `name_tc`，並移除 opencc 相依（本檔不再有任何機器轉換）。
+#    若日後真要顯示国服／社群慣用的皮名，那是**第二個欄位**且必須在畫面上註明來源，
+#    不得再讓它冒充繁中官方名。
 
 ROOT = os.environ.get('FFXIV_PROJECT_ROOT', 'C:/FFXIVProject')
 DICT = os.path.join(ROOT, 'data', 'item_dict')
@@ -45,7 +51,9 @@ TEAMCRAFT_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcr
                  'staging/libs/data/src/lib/json/treasures.json')
 
 # 社群分級（高→低）：itemId → (grade 標籤, 版本)。繁中名不寫這裡，從 item_lookup 生成。
-# G18/46185 暫不列（繁中名未進 item_lookup，與 reference 一致；item_dict 月更後補）。
+# G18/46185 暫不列。⚠️ 2026-08-13 複核：原因寫的是「繁中名未進 item_lookup」，**現在已經進了**
+# （name_tc =「陳舊的卡岡圖亞革地圖」）⇒ 這條理由已失效。要不要補 G18 是**內容決策**（還需確認
+# Teamcraft 是否有它的點位），不在本次「正名」範圍內，留給 Owner。
 GRADE_CATALOG = [
     (43557, 'G17', '7.0'), (43556, 'G16', '7.0'),
     (39591, 'G15', '6.3'), (36612, 'G14', '6.0'), (36611, 'G13', '6.0'),
@@ -83,10 +91,10 @@ def load_local():
     with open(os.path.join(DICT, 'lspl', 'aetherytes.json'), encoding='utf-8') as f:
         aeth = json.load(f)              # [{map, x, y, type, ...}]（與 marketboard build_gathering_nodes 同一份）
     conn = sqlite3.connect(os.path.join(DICT, 'item_lookup.sqlite'))
-    rows = {iid: conn.execute('SELECT name_sc FROM items WHERE id=?', (iid,)).fetchone() for iid in GRADE_ITEMIDS}
+    rows = {iid: conn.execute('SELECT name_tc FROM items WHERE id=?', (iid,)).fetchone() for iid in GRADE_ITEMIDS}
     conn.close()
-    # 完整繁中名 = s2twp(name_sc)（name_tc 對藏寶圖是通用「地圖Gxx」錯名，見檔頭）
-    names = {iid: (_S2T.convert(row[0]) if row and row[0] else None) for iid, row in rows.items()}
+    # 繁中名 = 台服解包原文（name_tc）。**不做任何轉換**——見檔頭 2026-08-13 更正。
+    names = {iid: (row[0] if row and row[0] else None) for iid, row in rows.items()}
     return places, maps, names, aeth
 
 
@@ -139,7 +147,7 @@ def main():
     out_pts = [{'id': t['id'], 'x': round(t['coords']['x'], 2), 'y': round(t['coords']['y'], 2),
                 'map': t['map'], 'partySize': t.get('partySize'), 'item': t['item']} for t in pts]
 
-    meta = {'source': 'Teamcraft (treasures.json) · 傳送水晶 lspl/aetherytes.json（本地）· 物品名 item_lookup.name_sc→s2twp · 地名 place_names（本地權威）',
+    meta = {'source': 'Teamcraft (treasures.json) · 傳送水晶 lspl/aetherytes.json（本地）· 物品名 item_lookup.name_tc（台服解包原文，零轉換） · 地名 place_names（本地權威）',
             'gradeCount': len(grades), 'mapCount': len(out_maps), 'pointCount': len(out_pts),
             'aetheryteCount': sum(len(m['aetherytes']) for m in out_maps.values())}
 

@@ -24,6 +24,14 @@
   function toast(msg, v) { if (window.FFXIVToast && FFXIVToast.show) FFXIVToast.show(msg, v || 'ok'); }
   function badge(text, v) { var s = document.createElement('span'); s.className = 'codex-badge' + (v ? ' codex-badge--' + v : ''); s.textContent = text; return s; }
   function zoneName(mid) { var m = DATA.maps[mid]; return (m && m.zone) || ('地圖 ' + mid); }
+  /* 「名稱（等級）」的標籤——但**名稱本身已含等級時不重複**。
+     2026-08-13 正名後（改用台服解包原文），13 張圖裡有 12 張的官方名就叫「陳舊的地圖G17」，
+     再串一次 grade 會變成「陳舊的地圖G17（G17）」。只有「深層傳送魔紋的地圖」（綠圖）
+     的名字不含等級，仍需要補上。⇒ 判斷放這裡一次，不要在兩個呼叫點各寫一份。 */
+  function gradeLabel(g) {
+    var n = g.name || '';
+    return n.indexOf(g.grade) >= 0 ? n : (n + '（' + g.grade + '）');
+  }
   function copyText(t) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }) : Promise.resolve(false); }
   // 整條複製的每行也自帶地名（原本只有「1. ( 21 , 14 )」缺地名，貼進遊戲沒人看得懂在哪張圖）。
   // 格式化本體在 treasure-core（純函式、有測試）。
@@ -80,8 +88,8 @@
   }
   function selectGrade(g) {
     state.grade = g; state.mapId = null; renderMaps(g);
-    el['map-title'].textContent = g.name + '（' + g.grade + '）· 選擇地圖';
-    showStep('map'); announce('已選 ' + g.name + ' ' + g.grade + '，請選地圖');
+    el['map-title'].textContent = gradeLabel(g) + ' · 選擇地圖';
+    showStep('map'); announce('已選 ' + gradeLabel(g) + '，請選地圖');
   }
 
   // 依 grade 算各地圖點數 + 按區名排序（renderMaps / renderMapTabs 共用，避免兩處各寫一份分組排序漂移）

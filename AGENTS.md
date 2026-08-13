@@ -60,14 +60,15 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
 
 ```bash
-npm test   # 串四套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）
+npm test   # 串五套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）
 # 或個別跑：
 node tests/core.test.mjs           # 座標換算 + 路線優化 golden（含 dormant 2-opt 固定 golden）
 node tests/room-pure.test.mjs      # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化 + sanitizeDisplayName 顯示名淨化
 node tests/drift.test.mjs          # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS（token 邊界比對）+ 頂層項目已分類（allow/deny 覆蓋、兩清單無交集）
 node worker/tests/worker.test.mjs  # 房間 applyOp/validate/originAllowed/roomFull/公開路由閘（含「並發加點不互蓋」證明）
+node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；需 data/item_dict，拿不到權威源一律失敗不 skip
 
-py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures.json（需 opencc；有缺涵蓋率 exit 1）
+py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
 cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 STOP 交 shawn 正式 deploy）
 ```
 
