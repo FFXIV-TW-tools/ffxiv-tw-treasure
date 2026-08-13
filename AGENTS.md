@@ -27,7 +27,11 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **`improve2Opt`（2-opt）是閉環假設**（尾端 `(k+1)%length` 幻邊）：本工具是**開放路徑**（`calcTotalDistance` 只累加 n-1 段）。目前 `use2Opt` 預設關、無產品呼叫者；啟用前先修尾端幻邊，且測試用**固定 golden `deepEqual`**釘行為，**勿用**「≤ 非2opt」單調斷言（開放路徑下會 flaky）。
 - **外部圖片主機一律同步 `_headers` 的 CSP `img-src`**：資料重建可能讓上游換網域（2026-07-30 實踩：地圖網址換 v2.xivapi.com，CSP 沒跟 → 線上地圖全黑）。**本機 `python -m http.server` 不套 `_headers`，CSP 問題本地測不出來**；`tests/drift.test.mjs` 已機械守（圖片主機 ⊆ img-src 白名單）。
 - **地圖上的傳送點沿用既有實作**：圖示＝主水晶 `060453`（22px，xivapi），與 marketboard 的 map_view 模組（external/ffxiv-tw-marketboard 下 modules 目錄）同一組（**勿自創圖示／emoji**——該檔已記「emoji 在米色地圖上幾乎看不到」）；資料＝monorepo item_dict 的 lspl 目錄下 aetherytes.json（本地權威；勿接 Teamcraft 網路檔，內容相同）；**只收 type 0 主水晶**，type 1 是以太之光＝出口／換圖點，不是傳送目的地（2026-07-30 Owner 判定）。
-- **繁中至上 / 繁中名走本地權威源**：物品名 = `item_lookup.name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用「地圖Gxx」錯名）；地名 = `place_names.json`（map-id keyed）。**禁自建對照表**。座標公式 = FFXIV 官方 datamining；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
+- **繁中至上 / 繁中名一律台服解包原文、零機器轉換**（2026-08-13 更正）：物品名 = `item_lookup.name_tc` **且 `name_tc_source='dump'`**；地名 = `place_names.json`（map-id keyed）。**禁自建對照表、禁 OpenCC 機轉**。
+  ⚠️ 本行原文是「物品名 = `name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用『地圖Gxx』**錯名**）」——**那個括號裡的判斷是錯的，而它就是 bug 的來源**：「陳舊的地圖G17」正是台服 client 出貨的名字（日服同為編號式 `古ぼけた地図G17`，只有英文用皮名）。照那句話做出來的站顯示的是**国服名機轉**，玩家拿回遊戲內搜尋找不到，而畫面上完全看不出問題。
+  ⚠️ 另一個更隱蔽的陷阱：**「`item_lookup` 有繁中名」不等於「台服有這個名字」**。G18(46185) 的 `name_tc` 有值（国服名機轉），但台服解包裡是**空字串** ⇒ 判斷必須看 `name_tc_source`，不能只看有沒有值。
+  ⚠️ **多語（en/ja）名詞不進資料檔**：由 `tools/build-i18n-names.py` 生成到 `i18n/en.js`／`i18n/ja.js` 的標記區塊——字典只在切外語時才載入 ⇒ 繁中訪客一個位元組都不用付（monorepo 鐵則「資料只載當前這份會用到的」）。
+- **座標公式 = FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
 - **worker 只導出 function**：workerd 把 module 具名導出當 entrypoint 檢查，導出裸值（number/物件）會讓整支 worker 起不來、`wrangler dev` 直接掛（2026-07-30 B-004：`MAX_CONN` 常數導出 → 本地端到端測試斷了好幾輪都沒人發現）。測試需要常數就導出 getter（`maxConn()`）。
 - **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler（CSP friendly）— 維持此姿態，勿引入 `innerHTML`。
 - **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 356 行（2026-07-30 由 505 行按職責拆出 `app-modal.js` 對話框／`route-map.js` 區域大圖／`route-panel.js` 共享路線面板），其餘各檔偏小。**再逼近 500 就繼續按職責分層**（下一候選＝三步狀態機 vs 裁切卡渲染），勿硬塞。
@@ -51,7 +55,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 >
 > ⚠️ 它**刻意不併進本 repo 既有的測試 runner**：該檔與 `functions/_middleware.js` 是 13 站逐站複製的樣板（每站只換 `OLD_HOST`／`NEW_ORIGIN` 兩個常數），檔名與介面必須跨站一致，不能為配合各站慣例改寫——改寫等於每站手動調整，正是 monorepo 交接頁一致性哨兵要防的漏抄。**既有測試基線不變。**
 
-> 測試基線 **4 套全綠 · 104 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
+> 測試基線 **6 套全綠 · 186 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 20 / i18n 62；**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
 > 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
@@ -59,15 +63,17 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
 <!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="20" -->
+<!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="62" -->
 
 ```bash
-npm test   # 串五套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）
+npm test   # 串六套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）+ names-authority（顯示名＝台服解包）+ i18n（薄 wrapper → portal 共用哨兵）
 # 或個別跑：
 node tests/core.test.mjs           # 座標換算 + 路線優化 golden（含 dormant 2-opt 固定 golden）
 node tests/room-pure.test.mjs      # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化 + sanitizeDisplayName 顯示名淨化
 node tests/drift.test.mjs          # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS（token 邊界比對）+ 頂層項目已分類（allow/deny 覆蓋、兩清單無交集）
 node worker/tests/worker.test.mjs  # 房間 applyOp/validate/originAllowed/roomFull/公開路由閘（含「並發加點不互蓋」證明）
 node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；權威源＝datamining_tc/tc_Item.csv **原始解包**，不用 item_lookup.name_tc（那欄混了 OpenCC fallback）；拿不到權威源一律失敗不 skip。⚠️ 2026-08-13 更正：`item_lookup` **現在有 `name_tc_source` 欄**（dump/dt/tnze/opencc），故產生器改為只收 `'dump'`——這一欄之前不存在，「有繁中名」與「台服真的有這個名字」在資料上完全無法區分，我就是這樣把 G18 誤判成「可以補了」（它的 name_tc 是国服名機轉，台服解包裡是空字串）。哨兵仍讀原始 CSV：那是**獨立於 sqlite 的第二個證人**，兩邊都錯才會漏
+node tests/i18n.test.mjs           # i18n 三組檢查（字典雙向漂移／覆蓋率／shim 降級）——**薄 wrapper，實作在 portal `tools/i18n-check.mjs`**；本站只留 `i18n.config.json`。拿不到共用哨兵一律失敗不 skip
 
 py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
 cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 STOP 交 shawn 正式 deploy）

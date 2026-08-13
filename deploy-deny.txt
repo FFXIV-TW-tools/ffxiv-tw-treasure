@@ -14,3 +14,4 @@ worker
 .pytest_cache
 node_modules
 package-lock.json
+i18n.config.json

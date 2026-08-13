@@ -82,6 +82,54 @@
 })();</script>
 
 <link rel="stylesheet" href="styles.css">
+
+<!-- ═══ i18n 啟動樣板（B-116；整段照抄自 portal templates/i18n-bootstrap.html）═══
+     ⚠️ 必須在下方 js/*.js 之前：它們雖是 defer、天然排在後面，但 `i18n.js` 是靠
+        document.write 同步注入的，位置一挪就可能落到主程式之後 ⇒ 靜態文案已翻譯、
+        程式產生的文字還是繁中的混血畫面。
+     ⚠️ 不得排到最上面那支交接腳本之前（那支的「<head> 第一支」是規格）。 -->
+<script>window.FFXIVI18n = {
+  // ⚠️ 這裡**必須**做插值，不能只 `return k`：`t('共 {n} 點', {n: 3})` 在降級時會原樣顯示
+  //    成「共 {n} 點」——降級路徑本來就是最不會被測到的，卻是壞在使用者眼前的那一次。
+  t: function (k, p) {
+    return p ? String(k).replace(/\{(\w+)\}/g, function (m, n) { return n in p ? String(p[n]) : m; }) : k;
+  },
+  scan: function () { return 0; }, setLang: function () {},
+  getLang: function () { return 'zh-TW'; }, getSupported: function () { return ['zh-TW']; }, boot: function () {}
+};</script>
+<script>(function () {
+  // ⚠️ **只有真的要外語時才載**。這支是同步的 parser-blocking 跨站腳本：無條件載入等於讓
+  //    100% 的訪客（絕大多數是繁中）為少數人用的功能多背一個「xivtc.com 慢或不通就卡住解析」
+  //    的相依。繁中路徑不需要它——shim 已經讓 t() 回傳原文。
+  var want = null;
+  try { want = new URLSearchParams(location.search).get('lang'); } catch (e) {}
+  if (!want) { try { want = localStorage.getItem('ffxiv-tools-lang'); } catch (e2) {} }
+  if (!want || want === 'zh-TW') {
+    // ⚠️ 不載入 i18n.js **不等於** 語言鈕可以不能按。接線的 wireSwitcher() 住在 i18n.js 裡，
+    //    這條分支要自己接：否則從沒選過語言的人（＝幾乎每個訪客）按下去完全沒反應，
+    //    沒有錯誤、沒有 log，就只是「按鈕壞了」。
+    document.addEventListener('DOMContentLoaded', function () {
+      var btns = document.querySelectorAll('[data-i18n-setlang]');
+      for (var i = 0; i < btns.length; i++) {
+        (function (el) {
+          el.addEventListener('click', function () {
+            var v = el.getAttribute('data-i18n-setlang');
+            if (!v || v === 'zh-TW') return;
+            try { localStorage.setItem('ffxiv-tools-lang', v); } catch (e3) {}
+            location.reload();
+          });
+        })(btns[i]);
+      }
+    });
+    return;
+  }
+  var dev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  var base = dev ? 'http://localhost:8774/ffxiv-tw-tools-portal/' : 'https://xivtc.com/';
+  // ⚠️ 不得加 defer／async：兩者都會讓 i18n.js 排到主程式之後。
+  document.write('<script src="' + base + 'i18n.js"><\/script>');
+})();</script>
+<script>window.FFXIVI18n.boot({ path: 'i18n/', langs: ['en', 'ja'] });</script>
+
 <script defer src="js/treasure-core.js"></script>
 <script defer src="js/room-pure.js"></script>
 <script defer src="js/room.js"></script>
@@ -109,15 +157,24 @@
 </head>
 <body>
   <header class="page-header">
-    <h1 class="codex-h1"><span class="ph-icon" aria-hidden="true">🗺️</span>挖寶共用房間 <span class="sub codex-label codex-label--muted">FFXIV 繁中服</span></h1>
+    <h1 class="codex-h1"><span class="ph-icon" aria-hidden="true">🗺️</span><span data-i18n="挖寶共用房間">挖寶共用房間</span> <span class="sub codex-label codex-label--muted" data-i18n="FFXIV 繁中服">FFXIV 繁中服</span></h1>
   </header>
 
   <main class="codex-container">
+    <!-- 語言鈕。刻意放在任何 role="tablist" 外面（塞進去會讓輔助科技把它當成多一個分頁播報）。
+         不寫 onclick——`data-i18n-setlang` 由 i18n.js 自動接線並同步 aria-pressed，
+         CDN 掛掉時就只是幾顆沒反應的鈕，而不是一個 CSP inline handler 的例外。 -->
+    <div class="tre-lang" role="group" aria-label="介面語言" data-i18n-attr="aria-label:介面語言">
+      <button class="tre-lang__btn" type="button" data-i18n-setlang="zh-TW" aria-pressed="true">繁中</button>
+      <button class="tre-lang__btn" type="button" data-i18n-setlang="en" aria-pressed="false">EN</button>
+      <button class="tre-lang__btn" type="button" data-i18n-setlang="ja" aria-pressed="false">日本語</button>
+    </div>
+
     <!-- 引導 intro -->
     <section class="codex-tablet codex-tablet--cyan tre-intro">
       <span class="codex-hud" aria-hidden="true"></span>
-      <p class="codex-body">🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。</p>
-      <p class="codex-body tre-intro__feat">✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。</p>
+      <p class="codex-body" data-i18n-html="🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。">🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。</p>
+      <p class="codex-body tre-intro__feat" data-i18n-html="✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。">✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。</p>
     </section>
 
     <!-- 多人房間（建立 / 加入 / 房號 / 在線人數 / 邀請）— app.js 依狀態 render -->
@@ -126,12 +183,12 @@
     </section>
 
     <!-- 步驟列 -->
-    <nav class="tre-steps" aria-label="步驟">
-      <button type="button" class="tre-step" data-goto="grade">① 選等級</button>
+    <nav class="tre-steps" aria-label="步驟" data-i18n-attr="aria-label:步驟">
+      <button type="button" class="tre-step" data-goto="grade" data-i18n="① 選等級">① 選等級</button>
       <span class="tre-steps__sep" aria-hidden="true">›</span>
-      <button type="button" class="tre-step" data-goto="map" disabled>② 選地圖</button>
+      <button type="button" class="tre-step" data-goto="map" disabled data-i18n="② 選地圖">② 選地圖</button>
       <span class="tre-steps__sep" aria-hidden="true">›</span>
-      <span class="tre-step tre-step--static" data-step="treasure">③ 挖掘點</span>
+      <span class="tre-step tre-step--static" data-step="treasure" data-i18n="③ 挖掘點">③ 挖掘點</span>
     </nav>
 
     <div id="tre-status" class="codex-sr-only" role="status" aria-live="polite"></div>
@@ -139,10 +196,13 @@
     <!-- Step 1：選等級 -->
     <section id="step-grade" class="codex-tablet codex-tablet--cyan tre-panel">
       <span class="codex-hud" aria-hidden="true"></span>
-      <h2 class="codex-h2">選擇藏寶圖等級</h2>
-      <p class="codex-body tre-hint">選你手上藏寶圖的等級（依生物皮命名，後綴 Gxx）。</p>
+      <h2 class="codex-h2" data-i18n="選擇藏寶圖等級">選擇藏寶圖等級</h2>
+      <!-- ⚠️ 原文寫「依生物皮命名，後綴 Gxx」——2026-08-13 正名後那句話是錯的：
+           台服官方名是編號式（「陳舊的地圖G17」），生物皮命名是英文與国服的慣例。
+           那句提示是跟著被機轉名誤導的敘述一起寫下的。 -->
+      <p class="codex-body tre-hint" data-i18n="選你手上藏寶圖的等級（台服官方名為「陳舊的地圖Gxx」）。">選你手上藏寶圖的等級（台服官方名為「陳舊的地圖Gxx」）。</p>
       <div id="grade-grid" class="tre-grid tre-grid--grade">
-        <p class="codex-body">… 展開卷軸 …</p>
+        <p class="codex-body" data-i18n="… 展開卷軸 …">… 展開卷軸 …</p>
       </div>
     </section>
 
@@ -150,8 +210,8 @@
     <section id="step-map" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2" id="map-title">選擇地圖</h2>
-        <button type="button" class="codex-btn codex-btn--ghost" data-back="grade">← 換等級</button>
+        <h2 class="codex-h2" id="map-title" data-i18n="選擇地圖">選擇地圖</h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="grade" data-i18n="← 換等級">← 換等級</button>
       </div>
       <div id="map-grid" class="tre-grid tre-grid--map"></div>
     </section>
@@ -160,15 +220,15 @@
     <section id="step-treasure" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2" id="tre-title">挖掘點</h2>
-        <button type="button" class="codex-btn codex-btn--ghost" data-back="map">← 換地圖</button>
+        <h2 class="codex-h2" id="tre-title" data-i18n="挖掘點">挖掘點</h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="map" data-i18n="← 換地圖">← 換地圖</button>
       </div>
-      <nav id="map-tabs" class="tre-maptabs" aria-label="同等級地圖快速切換" hidden></nav>
-      <p class="codex-body tre-hint">把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片即可加入共享路線。</p>
+      <nav id="map-tabs" class="tre-maptabs" aria-label="同等級地圖快速切換" data-i18n-attr="aria-label:同等級地圖快速切換" hidden></nav>
+      <p class="codex-body tre-hint" data-i18n="把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片即可加入共享路線。">把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片即可加入共享路線。</p>
       <div class="tre-treasure-layout">
         <div id="dig-grid" class="tre-grid tre-grid--dig"></div>
         <aside class="tre-sidemap">
-          <div id="full-map" class="tre-fullmap" aria-label="全區地圖（含所有挖掘點標記）"></div>
+          <div id="full-map" class="tre-fullmap" aria-label="全區地圖（含所有挖掘點標記）" data-i18n-attr="aria-label:全區地圖（含所有挖掘點標記）"></div>
           <p id="full-map-info" class="codex-small tre-fullmap__info"></p>
         </aside>
       </div>
@@ -178,23 +238,24 @@
     <section id="route-panel" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2">🧭 共享路線 <span id="route-count" class="codex-small"></span></h2>
+        <h2 class="codex-h2"><span data-i18n="🧭 共享路線">🧭 共享路線</span> <span id="route-count" class="codex-small"></span></h2>
         <div class="tre-route-actions">
-          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize">建議順序</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" title="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友">📋 複製成巨集</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done">清除已完成</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear">🗑 清空</button>
+          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize" data-i18n="建議順序">建議順序</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" title="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n-attr="title:複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n="📋 複製成巨集">📋 複製成巨集</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done" data-i18n="清除已完成">清除已完成</button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear" data-i18n="🗑 清空">🗑 清空</button>
         </div>
       </div>
       <p id="route-stat" class="codex-small" hidden></p>
-      <p id="route-empty" class="tre-hint">房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
+      <p id="route-empty" class="tre-hint" data-i18n="房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。">房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
       <div id="route-list" class="tre-route-list"></div>
     </section>
 
     <footer class="tre-footer">
+      <!-- ⚠️ 連結刻意留在可翻譯範圍**外**：key ＝繁中原文，而 <a href="…"> 帶雙引號，
+           塞進 data-i18n-html="…" 會把屬性提前收尾。連結文字 Teamcraft 也不需要翻譯。 -->
       <p class="codex-small">
-        挖掘點資料來源：<a href="https://ffxivteamcraft.com" target="_blank" rel="noopener">Teamcraft</a>；地名 / 物品名：繁中服 item_dict。
-        座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。
+        <span data-i18n="挖掘點資料來源：">挖掘點資料來源：</span><a href="https://ffxivteamcraft.com" target="_blank" rel="noopener">Teamcraft</a><span data-i18n="；地名 / 物品名為台服 client 解包原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。">；地名 / 物品名為台服 client 解包原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。</span>
       </p>
     </footer>
   </main>

@@ -4,6 +4,8 @@
  * 設計系統要求：ESC + overlay 點擊關閉（見 _DESIGN-SYSTEM §codex-modal）。 */
 (function () {
   'use strict';
+  // i18n：shim 保證 window.FFXIVI18n 一定在（index.html 的 inline shim 早於本檔）。
+  function t(k, p) { return window.FFXIVI18n.t(k, p); }
 
   // modal 外殼：建 overlay/標題/關閉鈕 + 綁 ESC/overlay 關閉；body 內容由呼叫端 build(bodyEl) 填。
   // onClose(val) 只會被呼叫一次（done 旗標）。回傳 { close, modal, footer }。
@@ -13,7 +15,7 @@
     modal.setAttribute('role', opts.role || 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', opts.titleId);
     var head = document.createElement('div'); head.className = 'codex-modal__header';
     var h = document.createElement('h3'); h.className = 'codex-h3'; h.id = opts.titleId; h.style.margin = '0'; h.textContent = opts.title || '';
-    var x = document.createElement('button'); x.type = 'button'; x.className = 'codex-modal__close'; x.textContent = '×'; x.setAttribute('aria-label', '關閉');
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'codex-modal__close'; x.textContent = '×'; x.setAttribute('aria-label', t('關閉'));
     head.appendChild(h); head.appendChild(x);
     var body = document.createElement('div'); body.className = 'codex-modal__body';
     var foot = document.createElement('div'); foot.className = 'codex-modal__footer';
@@ -42,10 +44,10 @@
   function confirmModal(opts) {
     opts = opts || {};
     return new Promise(function (resolve) {
-      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'codex-btn codex-btn--ghost'; cancel.textContent = opts.cancelText || '取消';
-      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'codex-btn codex-btn--' + (opts.danger ? 'danger' : 'primary'); ok.textContent = opts.confirmText || '確定';
+      var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'codex-btn codex-btn--ghost'; cancel.textContent = opts.cancelText || t('取消');
+      var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'codex-btn codex-btn--' + (opts.danger ? 'danger' : 'primary'); ok.textContent = opts.confirmText || t('確定');
       var s = shell({
-        title: opts.title || '確認', titleId: 'tre-confirm-title', role: 'alertdialog', escValue: false,
+        title: opts.title || t('確認'), titleId: 'tre-confirm-title', role: 'alertdialog', escValue: false,
         build: function (body) {
           var p = document.createElement('p'); p.className = 'codex-body'; p.style.margin = '0'; p.textContent = opts.message || '';
           body.appendChild(p);
@@ -63,9 +65,9 @@
   // opts: {title, image, markers:[{pct:{x,y}, label, active}], aetherytes:[{x,y}(百分比)], coordText, onCopy}
   function mapView(opts) {
     opts = opts || {};
-    var closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.className = 'codex-btn codex-btn--ghost'; closeBtn.textContent = '關閉';
+    var closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.className = 'codex-btn codex-btn--ghost'; closeBtn.textContent = t('關閉');
     var s = shell({
-      title: opts.title || '挖掘點', titleId: 'tre-mapview-title', maxWidth: 'min(92vw, 720px)', escValue: undefined,
+      title: opts.title || t('挖掘點'), titleId: 'tre-mapview-title', maxWidth: 'min(92vw, 720px)', escValue: undefined,
       build: function (body) {
         var wrap = document.createElement('div'); wrap.className = 'tre-mapview';
         if (opts.image) {
@@ -82,7 +84,7 @@
             wrap.appendChild(s);
           });
         } else {
-          var na = document.createElement('p'); na.className = 'codex-body'; na.textContent = '此地圖無圖資'; wrap.appendChild(na);
+          var na = document.createElement('p'); na.className = 'codex-body'; na.textContent = t('此地圖無圖資'); wrap.appendChild(na);
         }
         body.appendChild(wrap);
         var co = document.createElement('p'); co.className = 'tre-mapview__co codex-body'; co.textContent = opts.coordText || '';
@@ -90,7 +92,7 @@
       },
     }, function () {});
     if (opts.onCopy) {
-      var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'codex-btn codex-btn--primary'; cp.textContent = '📋 複製座標';
+      var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'codex-btn codex-btn--primary'; cp.textContent = t('📋 複製座標');
       cp.addEventListener('click', opts.onCopy);
       s.footer.appendChild(cp);
     }

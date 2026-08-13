@@ -38,7 +38,12 @@
     try { if (window.FFXIVSettings && FFXIVSettings.get) return PURE.sanitizeDisplayName(FFXIVSettings.get('character.name')); } catch (_) {}
     return '';
   }
-  function ownerName() { return customName() || '玩家' + owner().slice(0, 4); }
+  // ⚠️ 這個名字會**寫進共享房間給隊友看**，不是純顯示字串。翻譯它是刻意的：
+  //    英文介面的人自動取名為 Player1a2b，隊友看到的就是那個——與他自己看到的一致。
+  //    整句一條 key（不是「玩家」＋碼），日文語序才組得回來。
+  function ownerName() {
+    return customName() || window.FFXIVI18n.t('玩家{id}', { id: owner().slice(0, 4) });
+  }
   function canSetName() { return !!(window.FFXIVSettings && FFXIVSettings.set); }
   // 寫回 portal 設定（空字串＝清掉，回預設名）。回傳是否寫入成功（false＝portal CDN 未載入）。
   function setName(raw) {

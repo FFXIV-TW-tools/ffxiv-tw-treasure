@@ -20,23 +20,38 @@
     el[id] = document.getElementById(id);
   });
 
+  // i18n：shim 保證 window.FFXIVI18n 一定在（index.html 的 inline shim 早於本檔）。
+  // 整句一條 key（不拆片段串接）——片段在英日文語序下組不回通順句子。
+  function t(k, p) { return window.FFXIVI18n.t(k, p); }
+
   function announce(msg) { if (el['tre-status']) el['tre-status'].textContent = msg; }
   function toast(msg, v) { if (window.FFXIVToast && FFXIVToast.show) FFXIVToast.show(msg, v || 'ok'); }
   function badge(text, v) { var s = document.createElement('span'); s.className = 'codex-badge' + (v ? ' codex-badge--' + v : ''); s.textContent = text; return s; }
-  function zoneName(mid) { var m = DATA.maps[mid]; return (m && m.zone) || ('地圖 ' + mid); }
+  // ⚠️ 地名本身也走 t()：它們是**遊戲官方名**，字典裡那一段由 tools/build-i18n-names.py
+  //    從解包 join 出來，不是人手打的譯名（鐵則：不自創）。查不到就照樣顯示繁中。
+  function zoneName(mid) { var m = DATA.maps[mid]; return (m && m.zone) ? t(m.zone) : t('地圖 {id}', { id: mid }); }
   /* 「名稱（等級）」的標籤——但**名稱本身已含等級時不重複**。
      2026-08-13 正名後（改用台服解包原文），13 張圖裡有 12 張的官方名就叫「陳舊的地圖G17」，
      再串一次 grade 會變成「陳舊的地圖G17（G17）」。只有「深層傳送魔紋的地圖」（綠圖）
      的名字不含等級，仍需要補上。⇒ 判斷放這裡一次，不要在兩個呼叫點各寫一份。 */
+  /* 等級代號 → 顯示字。G6…G17 是 ASCII，翻不翻一樣；**只有「綠圖」是中文**
+     （社群慣用分級名，不是官方物品名，所以不在解包生成區塊裡）。
+     漏掉它的症狀是英文／日文畫面上孤零零一張中文卡片。 */
+  function gradeTag(g) { return g === '綠圖' ? t('綠圖') : g; }
+
   function gradeLabel(g) {
     var n = g.name || '';
-    return n.indexOf(g.grade) >= 0 ? n : (n + '（' + g.grade + '）');
+    var name = t(n);
+    return n.indexOf(g.grade) >= 0 ? name : t('{name}（{grade}）', { name: name, grade: g.grade });
   }
   function copyText(t) { return (navigator.clipboard && navigator.clipboard.writeText) ? navigator.clipboard.writeText(t).then(function () { return true; }, function () { return false; }) : Promise.resolve(false); }
   // 整條複製的每行也自帶地名（原本只有「1. ( 21 , 14 )」缺地名，貼進遊戲沒人看得懂在哪張圖）。
   // 格式化本體在 treasure-core（純函式、有測試）。
   function gameCoord(zone, p) { return TC.formatGameCoord(zone, p); }
-  function copyCoords(m, p) { var t = gameCoord((m && m.zone) || '', p); copyText(t).then(function (ok) { toast(ok ? '已複製：' + t : t, ok ? 'ok' : 'warn'); }); }
+  // ⚠️ 被複製的這串是要**貼進遊戲**的（/p 地名 座標），地名跟著介面語言走
+  //    （Owner 2026-08-13 裁示）。參數名已從 t 改成 raw：原本的局部變數叫 t，
+  //    會遮掩掉上面的 t() 函式。
+  function copyCoords(m, p) { var raw = gameCoord((m && m.zone) || '', p); copyText(raw).then(function (ok) { toast(ok ? t('已複製：{text}', { text: raw }) : raw, ok ? 'ok' : 'warn'); }); }
 
   // 對話框走 app-modal.js（codex-modal 設計系統）；未載入時 confirm 一律回 false（不誤觸破壞性操作）。
   function confirmModal(opts) { return MODAL ? MODAL.confirm(opts) : Promise.resolve(false); }
@@ -72,15 +87,15 @@
     DATA.grades.forEach(function (g) {
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-card';
       var top = document.createElement('div'); top.className = 'tre-card__top';
-      var gradeEl = document.createElement('span'); gradeEl.className = 'tre-card__grade'; gradeEl.textContent = g.grade;
+      var gradeEl = document.createElement('span'); gradeEl.className = 'tre-card__grade'; gradeEl.textContent = gradeTag(g.grade);
       top.appendChild(gradeEl);
       var lv = monsterLevel(g.expansion);
-      if (lv) { var lvEl = document.createElement('span'); lvEl.className = 'tre-card__lvl'; lvEl.textContent = '怪 Lv.' + lv; lvEl.title = '挖圖時可能出現的怪物等級'; top.appendChild(lvEl); }
-      var name = document.createElement('span'); name.className = 'tre-card__name'; name.textContent = g.name;
+      if (lv) { var lvEl = document.createElement('span'); lvEl.className = 'tre-card__lvl'; lvEl.textContent = t('怪 Lv.{lv}', { lv: lv }); lvEl.title = t('挖圖時可能出現的怪物等級'); top.appendChild(lvEl); }
+      var name = document.createElement('span'); name.className = 'tre-card__name'; name.textContent = t(g.name);   // 遊戲官方名：字典的生成區塊有 en/ja（tools/build-i18n-names.py）
       var meta = document.createElement('span'); meta.className = 'tre-card__meta';
-      meta.appendChild(badge(g.partySize === 8 ? '8 人' : '單人'));
-      meta.appendChild(badge('版本 ' + g.expansion, 'gold'));
-      if (g.special) meta.appendChild(badge('傳送門', 'neon'));
+      meta.appendChild(badge(g.partySize === 8 ? t('8 人') : t('單人')));
+      meta.appendChild(badge(t('版本 {v}', { v: g.expansion }), 'gold'));
+      if (g.special) meta.appendChild(badge(t('傳送門'), 'neon'));
       card.appendChild(top); card.appendChild(name); card.appendChild(meta);
       card.addEventListener('click', function () { selectGrade(g); });
       el['grade-grid'].appendChild(card);
@@ -88,8 +103,8 @@
   }
   function selectGrade(g) {
     state.grade = g; state.mapId = null; renderMaps(g);
-    el['map-title'].textContent = gradeLabel(g) + ' · 選擇地圖';
-    showStep('map'); announce('已選 ' + gradeLabel(g) + '，請選地圖');
+    el['map-title'].textContent = t('{grade} · 選擇地圖', { grade: gradeLabel(g) });
+    showStep('map'); announce(t('已選 {grade}，請選地圖', { grade: gradeLabel(g) }));
   }
 
   // 依 grade 算各地圖點數 + 按區名排序（renderMaps / renderMapTabs 共用，避免兩處各寫一份分組排序漂移）
@@ -110,7 +125,7 @@
       var img = document.createElement('img'); img.className = 'tre-mapcard__thumb'; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; if (m.image) img.src = m.image;
       var body = document.createElement('div'); body.className = 'tre-mapcard__body';
       var zone = document.createElement('span'); zone.className = 'tre-mapcard__zone codex-body'; zone.textContent = zoneName(mid);
-      var cnt = document.createElement('span'); cnt.className = 'codex-small'; cnt.textContent = counts[mid] + ' 點';
+      var cnt = document.createElement('span'); cnt.className = 'codex-small'; cnt.textContent = t('{n} 點', { n: counts[mid] });
       body.appendChild(zone); body.appendChild(cnt); card.appendChild(img); card.appendChild(body);
       card.addEventListener('click', function () { selectMap(mid); });
       el['map-grid'].appendChild(card);
@@ -118,8 +133,8 @@
   }
   function selectMap(mid) {
     state.mapId = mid; renderTreasures(); renderMapTabs();
-    el['tre-title'].textContent = zoneName(mid) + ' · ' + state.grade.grade + ' 挖掘點';
-    showStep('treasure'); announce('顯示 ' + zoneName(mid) + ' 的挖掘點');
+    el['tre-title'].textContent = t('{zone} · {grade} 挖掘點', { zone: zoneName(mid), grade: state.grade.grade });
+    showStep('treasure'); announce(t('顯示 {zone} 的挖掘點', { zone: zoneName(mid) }));
   }
 
   // 同等級地圖快速切換 tab（step 3 常駐）：玩家常一次準備多張同 grade 的圖、連續挖 → 直接切，不用退回選單
@@ -130,11 +145,11 @@
     var mg = mapsForGrade(g), counts = mg.counts, mids = mg.mids;
     if (mids.length <= 1) { host.hidden = true; return; }   // 只有 1 張圖不必顯示
     host.hidden = false;
-    var lbl = document.createElement('span'); lbl.className = 'tre-maptabs__lbl codex-small'; lbl.textContent = g.grade + ' 地圖：'; host.appendChild(lbl);
+    var lbl = document.createElement('span'); lbl.className = 'tre-maptabs__lbl codex-small'; lbl.textContent = t('{grade} 地圖：', { grade: gradeTag(g.grade) }); host.appendChild(lbl);
     mids.forEach(function (mid) {
       var chip = document.createElement('button'); chip.type = 'button';
       chip.className = 'tre-maptab' + (mid === state.mapId ? ' is-active' : '');
-      chip.textContent = zoneName(mid) + '（' + counts[mid] + '）';
+      chip.textContent = t('{zone}（{n}）', { zone: zoneName(mid), n: counts[mid] });
       if (mid === state.mapId) chip.setAttribute('aria-current', 'true');
       chip.addEventListener('click', function () { if (mid !== state.mapId) selectMap(mid); });
       host.appendChild(chip);
@@ -155,7 +170,7 @@
       var off = TC.calcCardOffset({ x: p.x, y: p.y }, sf, DIG_W, DIG_H);
       // button（非 div）→ 鍵盤可 Tab/Enter/Space 操作、螢幕閱讀器可播報（加入共享路線是核心互動）
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-dig'; card.dataset.idx = i; card.dataset.key = p.id;
-      card.setAttribute('aria-label', '加入共享路線 X:' + p.x + ' Y:' + p.y);
+      card.setAttribute('aria-label', t('加入共享路線 X:{x} Y:{y}', { x: p.x, y: p.y }));
       card.setAttribute('aria-pressed', hasMine(p) ? 'true' : 'false');
       if (hasMine(p)) card.classList.add('is-added');
       var mapDiv = document.createElement('div'); mapDiv.className = 'tre-dig__map';
@@ -168,7 +183,7 @@
       var co = document.createElement('span'); co.className = 'tre-dig__co'; co.textContent = 'X:' + p.x + ' Y:' + p.y;
       bar.appendChild(co);
       card.appendChild(mapDiv); card.appendChild(pin); card.appendChild(num); card.appendChild(tick); card.appendChild(bar);
-      card.title = '點一下加入 / 移出共享路線';
+      card.title = t('點一下加入 / 移出共享路線');
       card.addEventListener('click', function () { toggleMine(p); });
       card.addEventListener('mouseenter', function () { highlight(i, false); });
       card.addEventListener('focus', function () { highlight(i, false); });
@@ -185,7 +200,7 @@
       mk.addEventListener('mouseenter', function () { highlight(i, true); });
       el['full-map'].appendChild(mk);
     });
-    el['full-map-info'].textContent = pts.length + ' 個挖掘點 · 點卡片即可加入共享路線';
+    el['full-map-info'].textContent = t('{n} 個挖掘點 · 點卡片即可加入共享路線', { n: pts.length });
   }
 
   function highlight(i, scrollDig) {
@@ -208,20 +223,20 @@
   // 若照舊樂觀 toast「已加入」就是謊報成功→掉點。未連上時給誠實回饋、擋下操作。
   function ensureConnected() {
     if (ROOM && ROOM.isConnected()) return true;
-    toast('連線中，尚未同步，請稍後再試', 'warn');
+    toast(t('連線中，尚未同步，請稍後再試'), 'warn');
     return false;
   }
 
   function toggleMine(p) {
     if (!ROOM || !ROOM.isInRoom()) {
-      toast('多人挖寶？先在上方「建立 / 加入房間」', 'warn');
+      toast(t('多人挖寶？先在上方「建立 / 加入房間」'), 'warn');
       if (el['room-bar'] && el['room-bar'].scrollIntoView) el['room-bar'].scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     if (!ensureConnected()) return;
     var key = myKey(p);
-    if (shared.points.some(function (q) { return q.key === key; })) { ROOM.removePoint(key); toast('已從共享路線移除（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
-    else { ROOM.addPoint({ key: key, owner: ROOM.owner(), ownerName: ROOM.ownerName(), map: p.map, x: p.x, y: p.y, item: p.item }); toast('➕ 已加入共享路線（X:' + p.x + ' Y:' + p.y + '）', 'ok'); }
+    if (shared.points.some(function (q) { return q.key === key; })) { ROOM.removePoint(key); toast(t('已從共享路線移除（X:{x} Y:{y}）', { x: p.x, y: p.y }), 'ok'); }
+    else { ROOM.addPoint({ key: key, owner: ROOM.owner(), ownerName: ROOM.ownerName(), map: p.map, x: p.x, y: p.y, item: p.item }); toast(t('➕ 已加入共享路線（X:{x} Y:{y}）', { x: p.x, y: p.y }), 'ok'); }
     // 即時 toast 給操作回饋（不等廣播）；卡片 ✓ 狀態仍由 DO 廣播回 refreshDigAdded 更新
   }
 
@@ -233,17 +248,17 @@
   // 名稱是加點當下快照進 DO 每個點的 → 改名只影響之後加的點（提示寫在 hint，不假裝會回溯）。
   function makeNameGroup() {
     var g = document.createElement('div'); g.className = 'tre-roombar__group';
-    var lbl = document.createElement('span'); lbl.className = 'tre-roombar__grouplbl codex-small'; lbl.textContent = '我的名稱：'; g.appendChild(lbl);
+    var lbl = document.createElement('span'); lbl.className = 'tre-roombar__grouplbl codex-small'; lbl.textContent = t('我的名稱：'); g.appendChild(lbl);
     var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-name-input';
     inp.maxLength = 24; inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
-    inp.setAttribute('aria-label', '我在共享路線顯示的名稱');
-    inp.title = '隊友在共享路線上看到的名稱（改名只影響之後加的點）';
+    inp.setAttribute('aria-label', t('我在共享路線顯示的名稱'));
+    inp.title = t('隊友在共享路線上看到的名稱（改名只影響之後加的點）');
     inp.addEventListener('change', function () {
       var before = inp.value;
-      if (!ROOM.setName(inp.value)) { toast('名稱未能儲存（設定服務未載入）', 'error'); return; }
+      if (!ROOM.setName(inp.value)) { toast(t('名稱未能儲存（設定服務未載入）'), 'error'); return; }
       inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
-      if (inp.value) toast('顯示名稱已改為「' + inp.value + '」（之後加的點生效）', 'ok');
-      else if (before.trim()) toast('名稱已清空，改回預設「' + ROOM.ownerName() + '」', 'ok');
+      if (inp.value) toast(t('顯示名稱已改為「{name}」（之後加的點生效）', { name: inp.value }), 'ok');
+      else if (before.trim()) toast(t('名稱已清空，改回預設「{name}」', { name: ROOM.ownerName() }), 'ok');
     });
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') inp.blur(); });
     g.appendChild(inp);
@@ -260,34 +275,35 @@
     var hud = document.createElement('span'); hud.className = 'codex-hud'; hud.setAttribute('aria-hidden', 'true'); el['room-bar'].appendChild(hud);
     var row = document.createElement('div'); row.className = 'tre-roombar__row'; el['room-bar'].appendChild(row);
     if (ROOM.isInRoom()) {
-      var lbl = document.createElement('span'); lbl.className = 'tre-roombar__label codex-body'; lbl.textContent = '房間'; row.appendChild(lbl);
+      var lbl = document.createElement('span'); lbl.className = 'tre-roombar__label codex-body'; lbl.textContent = t('房間'); row.appendChild(lbl);
       var codeEl = document.createElement('span'); codeEl.className = 'tre-roombar__code'; codeEl.textContent = ROOM.getCode(); row.appendChild(codeEl);
-      row.appendChild(roomBtn('📋 複製碼', function () { copyText(ROOM.getCode()).then(function (ok) { toast(ok ? '已複製房號' : ROOM.getCode(), 'ok'); }); }));
-      row.appendChild(roomBtn('🔗 邀請連結', function () { copyText(ROOM.inviteUrl()).then(function (ok) { toast(ok ? '已複製邀請連結' : '複製失敗', ok ? 'ok' : 'error'); }); }));
+      row.appendChild(roomBtn(t('📋 複製碼'), function () { copyText(ROOM.getCode()).then(function (ok) { toast(ok ? t('已複製房號') : ROOM.getCode(), 'ok'); }); }));
+      row.appendChild(roomBtn(t('🔗 邀請連結'), function () { copyText(ROOM.inviteUrl()).then(function (ok) { toast(ok ? t('已複製邀請連結') : t('複製失敗'), ok ? 'ok' : 'error'); }); }));
       var on = document.createElement('span'); on.className = 'tre-roombar__online codex-small';
-      on.textContent = '👥 ' + (shared.online || 1) + ' 人' + (ROOM.isConnected() ? '' : '（連線中…）'); row.appendChild(on);
+      on.textContent = ROOM.isConnected() ? t('👥 {n} 人', { n: shared.online || 1 })
+        : t('👥 {n} 人（連線中…）', { n: shared.online || 1 }); row.appendChild(on);
       if (ROOM.canSetName()) row.appendChild(makeNameGroup());
-      row.appendChild(roomBtn('離開', function () { ROOM.leave(); }));
+      row.appendChild(roomBtn(t('離開'), function () { ROOM.leave(); }));
     } else {
       // 建立（自動產碼）— 與「加入」明確分開
       var createG = document.createElement('div'); createG.className = 'tre-roombar__group';
-      var cl = document.createElement('span'); cl.className = 'tre-roombar__grouplbl codex-small'; cl.textContent = '開新房間：'; createG.appendChild(cl);
-      createG.appendChild(roomBtn('＋ 建立房間', function () {
-        ROOM.create().then(function (c) { toast('房間已建立：' + c + '（把房號或邀請連結給隊友）', 'ok'); }).catch(function () { toast('建立失敗（後端未連上）', 'error'); });
+      var cl = document.createElement('span'); cl.className = 'tre-roombar__grouplbl codex-small'; cl.textContent = t('開新房間：'); createG.appendChild(cl);
+      createG.appendChild(roomBtn(t('＋ 建立房間'), function () {
+        ROOM.create().then(function (c) { toast(t('房間已建立：{code}（把房號或邀請連結給隊友）', { code: c }), 'ok'); }).catch(function () { toast(t('建立失敗（後端未連上）'), 'error'); });
       }, 'primary'));
-      var ch = document.createElement('span'); ch.className = 'tre-roombar__grouphint codex-xs'; ch.textContent = '房號自動產生，分享給隊友'; createG.appendChild(ch);
+      var ch = document.createElement('span'); ch.className = 'tre-roombar__grouphint codex-xs'; ch.textContent = t('房號自動產生，分享給隊友'); createG.appendChild(ch);
       row.appendChild(createG);
-      var orEl = document.createElement('span'); orEl.className = 'tre-roombar__or codex-small'; orEl.textContent = '或'; row.appendChild(orEl);
+      var orEl = document.createElement('span'); orEl.className = 'tre-roombar__or codex-small'; orEl.textContent = t('或'); row.appendChild(orEl);
       // 加入（貼朋友的房號）
       var joinG = document.createElement('div'); joinG.className = 'tre-roombar__group';
-      var jl = document.createElement('span'); jl.className = 'tre-roombar__grouplbl codex-small'; jl.textContent = '加入朋友的房間：'; joinG.appendChild(jl);
-      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-room-input'; inp.placeholder = '朋友給的 6 碼房號'; inp.maxLength = 6; inp.setAttribute('aria-label', '輸入朋友的房號'); joinG.appendChild(inp);
-      var doJoin = function () { if (!ROOM.join(inp.value)) toast('房號需 6 碼', 'warn'); };
-      joinG.appendChild(roomBtn('加入', doJoin));
+      var jl = document.createElement('span'); jl.className = 'tre-roombar__grouplbl codex-small'; jl.textContent = t('加入朋友的房間：'); joinG.appendChild(jl);
+      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-room-input'; inp.placeholder = t('朋友給的 6 碼房號'); inp.maxLength = 6; inp.setAttribute('aria-label', t('輸入朋友的房號')); joinG.appendChild(inp);
+      var doJoin = function () { if (!ROOM.join(inp.value)) toast(t('房號需 6 碼'), 'warn'); };
+      joinG.appendChild(roomBtn(t('加入'), doJoin));
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); });
       var hist = ROOM.history();
       if (hist.length) {
-        var hl = document.createElement('span'); hl.className = 'codex-small tre-roombar__grouphint'; hl.textContent = '最近：'; joinG.appendChild(hl);
+        var hl = document.createElement('span'); hl.className = 'codex-small tre-roombar__grouphint'; hl.textContent = t('最近：'); joinG.appendChild(hl);
         hist.forEach(function (c) { var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'tre-room-chip'; chip.textContent = c; chip.addEventListener('click', function () { ROOM.join(c); }); joinG.appendChild(chip); });
       }
       row.appendChild(joinG);
@@ -323,19 +339,19 @@
     // 連線/同步狀態回饋（斷線時 op 會被丟棄 → 讓使用者看得到）
     if (st.status === 'joining' || st.status === 'created' || st.status === 'left') disconnectedOnce = false;
     // 連線/同步事件同步進 #tre-status（aria-live）→ 螢幕閱讀器聽得到，不只靠視覺 toast（U3）
-    if (st.status === 'expired') { toast('房間已過期（建立滿 6 小時），請重新建立房間', 'warn'); announce('房間已過期，請重新建立房間'); prevKeys = []; disconnectedOnce = false; return; }
-    if (st.status === 'opError') { toast('同步暫時失敗，剛才的操作未生效，請重試', 'error'); announce('同步暫時失敗，剛才的操作未生效，請重試'); return; }
-    if (st.status === 'disconnected') { if (ROOM.isInRoom()) { disconnectedOnce = true; toast('已斷線，重連中…', 'warn'); announce('已斷線，重新連線中'); } return; }
-    if (st.status === 'connected') { if (disconnectedOnce) { disconnectedOnce = false; toast('已重新連線', 'ok'); announce('已重新連線'); } return; }
+    if (st.status === 'expired') { toast(t('房間已過期（建立滿 6 小時），請重新建立房間'), 'warn'); announce(t('房間已過期，請重新建立房間')); prevKeys = []; disconnectedOnce = false; return; }
+    if (st.status === 'opError') { toast(t('同步暫時失敗，剛才的操作未生效，請重試'), 'error'); announce(t('同步暫時失敗，剛才的操作未生效，請重試')); return; }
+    if (st.status === 'disconnected') { if (ROOM.isInRoom()) { disconnectedOnce = true; toast(t('已斷線，重連中…'), 'warn'); announce(t('已斷線，重新連線中')); } return; }
+    if (st.status === 'connected') { if (disconnectedOnce) { disconnectedOnce = false; toast(t('已重新連線'), 'ok'); announce(t('已重新連線')); } return; }
     // 有人加入 → 小通知（自己首次連線 prevOnline=0 不報；init / 重連 status==='init' 不報）
     if (ROOM.isInRoom() && st.status !== 'init' && shared.online > prevOnline && prevOnline > 0)
-      toast('👥 有人加入房間（' + shared.online + ' 人）', 'ok');
+      toast(t('👥 有人加入房間（{n} 人）', { n: shared.online }), 'ok');
     if (ROOM.isInRoom() && st.status === 'state') {
       var me = ROOM.owner();
       var newly = newPts.filter(function (p) { return prevKeys.indexOf(p.key) < 0; });
       // 隊友加點 → 通知（只算別人加的新 key；自己加的不報）
       var others = newly.filter(function (p) { return p.owner !== me; });
-      if (others.length) toast('➕ ' + (others[0].ownerName || '隊友') + ' 加了 ' + others.length + ' 個挖掘點', 'ok');
+      if (others.length) toast(t('➕ {who} 加了 {n} 個挖掘點', { who: others[0].ownerName || t('隊友'), n: others.length }), 'ok');
       prevKeys = newPts.map(function (p) { return p.key; });
       // 只有「加點的當事人」自己觸發重排 → 避免線上 N 人各送一份相同 setOrder（O(N) 放大、逼近 rate limit）。
       // 重排廣播 key 不變 → newly 空 → iAdded false → 不再觸發，無迴圈。
@@ -349,7 +365,7 @@
   function fatalErr(msg) { el['grade-grid'].textContent = ''; var p = document.createElement('p'); p.className = 'tre-error codex-body'; p.textContent = msg; el['grade-grid'].appendChild(p); }
   function load() {
     renderRoomBar(); renderRoom();   // 先畫房間 bar（即使資料還沒到 / 已自動重連）
-    if (!TC) { fatalErr('核心模組未載入（treasure-core.js），請重新整理。'); return; }
+    if (!TC) { fatalErr(t('核心模組未載入（treasure-core.js），請重新整理。')); return; }
     Promise.all([
       fetch('data/grades.json').then(function (r) { return r.json(); }),
       fetch('data/maps.json').then(function (r) { return r.json(); }),
@@ -357,8 +373,8 @@
     ]).then(function (res) {
       DATA.grades = res[0].grades || []; DATA.maps = res[1].maps || {}; DATA.byItem = {};
       (res[2].treasures || []).forEach(function (p) { (DATA.byItem[p.item] = DATA.byItem[p.item] || []).push(p); });
-      renderGrades(); showStep('grade'); announce('已載入 ' + DATA.grades.length + ' 個等級');
-    }).catch(function (e) { fatalErr('資料載入失敗，請重新整理。（' + ((e && e.message) || e) + '）'); });
+      renderGrades(); showStep('grade'); announce(t('已載入 {n} 個等級', { n: DATA.grades.length }));
+    }).catch(function (e) { fatalErr(t('資料載入失敗，請重新整理。（{err}）', { err: (e && e.message) || e })); });
   }
   load();
 })();

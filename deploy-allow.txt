@@ -9,3 +9,4 @@ js
 robots.txt
 sitemap.xml
 styles.css
+i18n

@@ -315,3 +315,31 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   .tre-route-item__btn { min-width: 40px; min-height: 40px; padding: 8px; }
   .tre-fullmap__marker { min-width: 24px; height: 24px; line-height: 22px; }
 }
+
+/* ---------- 語言切換（B-116）----------
+   ⚠️ class 用本 repo 的 `tre-` 前綴，不是共用樣板裡寫的 `tool-lang`——
+   前綴由 ds-manifest 管制，裸 class 會被 pre-commit R7 擋下。 */
+.tre-lang {
+  display: flex;
+  gap: var(--space-1, 4px);
+  justify-content: flex-end;
+  margin-bottom: var(--space-2, 8px);
+}
+.tre-lang__btn {
+  font: inherit;
+  font-size: var(--fs-small, .8125rem);
+  color: var(--color-text-muted, #c0c9da);
+  background: transparent;
+  border: 1px solid var(--color-border, #2b3f56);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px var(--space-2, 8px);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.tre-lang__btn:hover { border-color: var(--color-accent, #e6c068); color: var(--color-text, #f5f5f5); }
+.tre-lang__btn:focus-visible { outline: 2px solid var(--color-accent, #e6c068); outline-offset: 2px; }
+.tre-lang__btn[aria-pressed="true"] {
+  border-color: var(--color-accent, #e6c068);
+  color: var(--color-accent, #e6c068);
+  font-weight: 600;
+}
