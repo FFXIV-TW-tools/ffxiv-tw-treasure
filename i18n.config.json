@@ -1,5 +1,6 @@
 {
   "_note": "共用哨兵設定（portal tools/i18n-check.mjs 消費）。本站不自寫哨兵——那 483 行裡 89% 與工具內容無關，是 pilot 期就證明過的純樣板。本檔只留真正屬於本站的事實：檔案清單與白名單。",
+  "styles": ["styles.css"],
   "dictDir": "i18n",
   "langs": ["en", "ja"],
   "entry": "index.html",

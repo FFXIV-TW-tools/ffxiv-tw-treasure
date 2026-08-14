@@ -158,17 +158,24 @@
 <body>
   <header class="page-header">
     <h1 class="codex-h1"><span class="ph-icon" aria-hidden="true">🗺️</span><span data-i18n="挖寶共用房間">挖寶共用房間</span> <span class="sub codex-label codex-label--muted" data-i18n="FFXIV 繁中服">FFXIV 繁中服</span></h1>
+    <!-- 語言鈕。刻意放在任何 role="tablist" 外面（塞進去會讓輔助科技把它當成多一個分頁播報）。
+         不寫 onclick——`data-i18n-setlang` 由 i18n.js 自動接線並同步 aria-pressed，
+         CDN 掛掉時就只是幾顆沒反應的鈕，而不是一個 CSP inline handler 的例外。
+         ⚠️ 2026-08-14 兩項一起改（Owner 指示「直接改共用面」）：
+           ① 版位由 `<main>` 內搬進 `.page-header`（共用 header 是 space-between ⇒ 自動靠右）。
+              原本在容器內距右 636px、faux 在 header 距右 24px —— 同一顆鈕兩站不在同一個地方。
+           ② class 由本地 `.tre-lang` 換成共用 `.codex-tabs--compact`／`.codex-tab--compact`。
+              本地那份的 `--color-accent` 是 **portal 預設金色**，而本站識別色是青色
+              ⇒ 語言鈕在一片青色的頁面上是金的。共用版吃 `--accent`，自動跟著站台識別色。
+         **不要改回本地 class 或搬離 header**；樣板見 portal `templates/i18n-bootstrap.html`。 -->
+    <div class="codex-tabs codex-tabs--compact" role="group" aria-label="介面語言" data-i18n-attr="aria-label:介面語言">
+      <button class="codex-tab codex-tab--compact" type="button" data-i18n-setlang="zh-TW" aria-pressed="true">繁中</button>
+      <button class="codex-tab codex-tab--compact" type="button" data-i18n-setlang="en" aria-pressed="false">EN</button>
+      <button class="codex-tab codex-tab--compact" type="button" data-i18n-setlang="ja" aria-pressed="false">日本語</button>
+    </div>
   </header>
 
   <main class="codex-container">
-    <!-- 語言鈕。刻意放在任何 role="tablist" 外面（塞進去會讓輔助科技把它當成多一個分頁播報）。
-         不寫 onclick——`data-i18n-setlang` 由 i18n.js 自動接線並同步 aria-pressed，
-         CDN 掛掉時就只是幾顆沒反應的鈕，而不是一個 CSP inline handler 的例外。 -->
-    <div class="tre-lang" role="group" aria-label="介面語言" data-i18n-attr="aria-label:介面語言">
-      <button class="tre-lang__btn" type="button" data-i18n-setlang="zh-TW" aria-pressed="true">繁中</button>
-      <button class="tre-lang__btn" type="button" data-i18n-setlang="en" aria-pressed="false">EN</button>
-      <button class="tre-lang__btn" type="button" data-i18n-setlang="ja" aria-pressed="false">日本語</button>
-    </div>
 
     <!-- 引導 intro -->
     <section class="codex-tablet codex-tablet--cyan tre-intro">
