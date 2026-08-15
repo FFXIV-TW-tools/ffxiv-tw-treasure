@@ -77,6 +77,16 @@
             (opts.aetherytes || []).forEach(function (a) { wrap.appendChild(TreasureRouteMap.aethIcon(a)); });
           }
           (opts.markers || []).forEach(function (mk) {
+            // 帶 icon 的標記＝遊戲原生圖示（採集點等），走 <img>；沒有 icon 才用文字徽章（挖掘點編號）。
+            // ⚠️ 不要拿 emoji 當地圖標記——米色地圖上幾乎看不到，而且那是自創圖示（AGENTS 鐵則）。
+            if (mk.icon) {
+              var im = document.createElement('img');
+              im.className = 'tre-mapview__node'; im.src = mk.icon;
+              im.loading = 'lazy'; im.alt = '';   // 尺寸由 CSS 給（.tre-mapview__node，與 marketboard 同一套）
+              if (mk.title) im.title = mk.title;
+              im.style.left = mk.pct.x + '%'; im.style.top = mk.pct.y + '%';
+              wrap.appendChild(im); return;
+            }
             var s = document.createElement('span');
             s.className = 'tre-fullmap__marker' + (mk.active ? ' is-active' : '');
             s.style.left = mk.pct.x + '%'; s.style.top = mk.pct.y + '%';

@@ -296,8 +296,12 @@ window.FFXIVI18nDict = {
   '依解包的採集等級門檻推導（解包沒有「哪個點掉哪張圖」的表）；點地區看點位。':
     'Derived from the level requirement in the game data (there is no table saying which node drops which map); tap a zone to see the spots.',
   '{zone} · 採集 Lv.{lv}（{n} 處）': '{zone} · Lv.{lv} nodes ({n} spots)',
-  '⛏ 採掘／碎石　🌿 採伐／割草　—— 在這些點採集有機會拿到藏寶圖':
-    '⛏ Mining / Quarrying　🌿 Logging / Harvesting — gathering at these spots can yield a treasure map',
+  '採礦工／園藝工在這些採集點採集，有機會拿到藏寶圖。':
+    'Gathering at these nodes as a Miner or Botanist can yield a treasure map.',
+  '採掘': 'Mining',
+  '碎石': 'Quarrying',
+  '採伐': 'Logging',
+  '割草': 'Harvesting',
   '這張圖可能開出（已知 {n} 項）': 'Possible chest rewards ({n} known)',
   '資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。':
     'Source: Teamcraft (community-maintained, may be incomplete); item names come from the TW client data.',

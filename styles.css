@@ -114,6 +114,16 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   border: 1px solid var(--color-border, #2b3f56); border-radius: var(--radius-sm, 6px); padding: 0 6px;
 }
 
+/* 採集點標記＝遊戲原生圖示（xivapi /i/060000/）。
+   ⚠️ 視覺處理照 marketboard 採集地圖的 `.map-pin-img`：**青色光暈 ＋ 黑色投影**。
+   遊戲的節點圖示是白色線稿，直接貼在米色地圖上幾乎看不見（實測過：圖片有載入、
+   定位也對，畫面上就是找不到）——傳送點那套淡陰影不夠，那顆圖示本身有色塊。 */
+.tre-mapview__node {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: none;
+  width: 30px; height: 30px;
+  filter: drop-shadow(0 0 4px var(--accent, #4ec9d0)) drop-shadow(0 1px 2px rgba(0, 0, 0, .85));
+}
+
 /* ── 去哪採到這張圖（step 2 底部；地區可點開看點位）── */
 .tre-gather { margin-top: var(--space-4); border-top: 1px solid var(--color-border, #2b3f56); padding-top: var(--space-3); }
 .tre-gather[hidden] { display: none; }

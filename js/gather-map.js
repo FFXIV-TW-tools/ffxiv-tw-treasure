@@ -13,8 +13,19 @@
   'use strict';
   function t(k, p) { return window.FFXIVI18n.t(k, p); }
 
-  // node type → 職業圖示（對齊 build-data.py 的 GATHER_TYPES：0 採掘 / 1 碎石 / 2 採伐 / 3 割草）
-  var TYPE_ICON = { 0: '⛏', 1: '⛏', 2: '🌿', 3: '🌿' };
+  /* node type → **遊戲原生地圖標記圖示**（xivapi `/i/060000/`）。
+     權威表＝marketboard `modules/price_utils.js` 的 `NODE_TYPE_ICON`（採集地圖用的同一組，
+     icon 身分已在那邊對過 4/5 綁反的坑）。傳送點 icon 走同一條路徑（route-map.js 060453）。
+     ⚠️ 初版用 emoji（⛏／🌿）被 Owner 退回：米色地圖上幾乎看不到，而且是自創圖示——
+     AGENTS 的傳送點那條鐵則早就寫過同一件事，這裡踩的是同一個坑。 */
+  var ICON_BASE = 'https://xivapi.com/i/060000/';
+  var TYPE_ICON = { 0: ICON_BASE + '060438.png', 1: ICON_BASE + '060437.png',
+                    2: ICON_BASE + '060433.png', 3: ICON_BASE + '060432.png' };
+  /* 職業動作名（marker 的 hover 說明）。⚠️ 刻意寫成**字面** t('…') 而不是 `t(表[type])`：
+     i18n 哨兵靠靜態掃描認 key，變數取用會讓這四條被判成「死 key」（實際發生過）。 */
+  function typeName(tp) {
+    return tp === 0 ? t('採掘') : tp === 1 ? t('碎石') : tp === 2 ? t('採伐') : t('割草');
+  }
 
   function create(deps) {
     var el = deps.el, TC = deps.TC, MODAL = deps.MODAL;
@@ -34,9 +45,10 @@
         title: t('{zone} · 採集 Lv.{lv}（{n} 處）', { zone: t(m.zone), lv: lv, n: pts.length }),
         image: m.image,
         markers: pts.map(function (p) {
-          return { pct: TC.coordsToPercent({ x: p.x, y: p.y }, m.sizeFactor), label: TYPE_ICON[p.t] || '•' };
+          return { pct: TC.coordsToPercent({ x: p.x, y: p.y }, m.sizeFactor),
+                   icon: TYPE_ICON[p.t], title: typeName(p.t) + ' Lv.' + lv };
         }),
-        coordText: t('⛏ 採掘／碎石　🌿 採伐／割草　—— 在這些點採集有機會拿到藏寶圖'),
+        coordText: t('採礦工／園藝工在這些採集點採集，有機會拿到藏寶圖。'),
       });
     }
 
