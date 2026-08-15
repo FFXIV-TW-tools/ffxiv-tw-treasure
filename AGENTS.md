@@ -31,10 +31,14 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
   ⚠️ 本行原文是「物品名 = `name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用『地圖Gxx』**錯名**）」——**那個括號裡的判斷是錯的，而它就是 bug 的來源**：「陳舊的地圖G17」正是台服 client 出貨的名字（日服同為編號式 `古ぼけた地図G17`，只有英文用皮名）。照那句話做出來的站顯示的是**国服名機轉**，玩家拿回遊戲內搜尋找不到，而畫面上完全看不出問題。
   ⚠️ 另一個更隱蔽的陷阱：**「`item_lookup` 有繁中名」不等於「台服有這個名字」**。G18(46185) 的 `name_tc` 有值（国服名機轉），但台服解包裡是**空字串** ⇒ 判斷必須看 `name_tc_source`，不能只看有沒有值。
   ⚠️ **多語（en/ja）名詞不進資料檔**：由 `tools/build-i18n-names.py` 生成到 `i18n/en.js`／`i18n/ja.js` 的標記區塊——字典只在切外語時才載入 ⇒ 繁中訪客一個位元組都不用付（monorepo 鐵則「資料只載當前這份會用到的」）。
+- **「藏寶圖從哪個採集點掉」在解包裡不存在，別再查一次**（2026-08-16 查證）：`GatheringItem` **有**藏寶圖（G17→`GatheringItemLevel` 100＝採集等級門檻，站上那行「⛏ 採集 Lv.N 以上的點可能挖到」就是它），但掃過 `GatheringPointBase` 全 1425 列與 Teamcraft `nodes.json` 的 `items`／`hiddenItems`，**13 張圖零命中** ⇒ 它是「採集時隨機額外取得」，不掛在任何採集點上。
+  ⇒ 站上的「去哪採到這張圖」（`data/gather.json` ＋ `js/gather-map.js`）是**依等級門檻推導**：取 `level` **恰好等於**門檻的採集點（來源＝monorepo item_dict 的 lspl 目錄下 nodes.json，與 aetherytes 同一份權威；只收 type 0–3，4/5＝刺魚／釣魚不會出圖）。**畫面上必須寫明是推導**，不得寫成官方保證，也不得自創地點清單。
+  ⚠️ 已知缺口：`nodes.json` 有一批節點 `map == 0`（2026-08-16 實測丟掉 197 個）——不知道在哪張圖就畫不出來，硬畫會標到錯的位置而畫面上完全正常 ⇒ 一律丟棄。所以點數是**下限**，不是全部。
+- **掉落物（`data/loot.json`）是社群整理、已知不完整，來源必須留在畫面上**：清單來自 Teamcraft `loot-sources.json`（＝Garland 同一份，已對照一致），**不是台服解包**；2026-08-16 實測 G16 26 筆、G6 32 筆，但 **G17 只有 2 筆、綠圖 0 筆**。物品**名字**仍走台服解包（`name_tc_source='dump'`，其餘整筆不出）。`tests/names-authority.test.mjs` 機械守「名稱逐筆＝解包」與「畫面上必須有『社群整理，可能不完整』」——少列幾項零回饋訊號，玩家會把它當完整清單。
 - **座標公式 = FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
 - **worker 只導出 function**：workerd 把 module 具名導出當 entrypoint 檢查，導出裸值（number/物件）會讓整支 worker 起不來、`wrangler dev` 直接掛（2026-07-30 B-004：`MAX_CONN` 常數導出 → 本地端到端測試斷了好幾輪都沒人發現）。測試需要常數就導出 getter（`maxConn()`）。
 - **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler（CSP friendly）— 維持此姿態，勿引入 `innerHTML`。
-- **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 356 行（2026-07-30 由 505 行按職責拆出 `app-modal.js` 對話框／`route-map.js` 區域大圖／`route-panel.js` 共享路線面板），其餘各檔偏小。**再逼近 500 就繼續按職責分層**（下一候選＝三步狀態機 vs 裁切卡渲染），勿硬塞。
+- **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 441 行（2026-07-30 由 505 行按職責拆出 `app-modal.js` 對話框／`route-map.js` 區域大圖／`route-panel.js` 共享路線面板），其餘各檔偏小。**再逼近 500 就繼續按職責分層**（下一候選＝三步狀態機 vs 裁切卡渲染），勿硬塞。
 
 ---
 
@@ -55,18 +59,18 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 >
 > ⚠️ 它**刻意不併進本 repo 既有的測試 runner**：該檔與 `functions/_middleware.js` 是 13 站逐站複製的樣板（每站只換 `OLD_HOST`／`NEW_ORIGIN` 兩個常數），檔名與介面必須跨站一致，不能為配合各站慣例改寫——改寫等於每站手動調整，正是 monorepo 交接頁一致性哨兵要防的漏抄。**既有測試基線不變。**
 
-> 測試基線 **6 套全綠 · 186 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 20 / i18n 62；**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
+> 測試基線 **6 套全綠 · 209 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 26 / i18n 79；names-authority 20→26＝2026-08-16 掉落物（`data/loot.json`）名稱同樣逐筆對台服解包＋來源標註不得消失；i18n 62→79＝共用哨兵演進＋新增 `js/gather-map.js` 進掃描清單，非本站回歸。以下為 2026-08-13 原文：**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
 > 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
-<!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="20" -->
-<!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="76" --><!-- 2026-08-15 同步實測：62→76（EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值） -->
+<!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="26" -->
+<!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="79" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
 
 ```bash
-npm test   # 串六套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS/部署分類）+ worker（op-based 並發不互蓋）+ names-authority（顯示名＝台服解包）+ i18n（薄 wrapper → portal 共用哨兵）
+npm test   # 串六套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS（掃整個 js/）/部署分類）+ worker（op-based 並發不互蓋）+ names-authority（顯示名＝台服解包）+ i18n（薄 wrapper → portal 共用哨兵）
 # 或個別跑：
 node tests/core.test.mjs           # 座標換算 + 路線優化 golden（含 dormant 2-opt 固定 golden）
 node tests/room-pure.test.mjs      # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化 + sanitizeDisplayName 顯示名淨化
@@ -75,7 +79,8 @@ node worker/tests/worker.test.mjs  # 房間 applyOp/validate/originAllowed/roomF
 node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；權威源＝datamining_tc/tc_Item.csv **原始解包**，不用 item_lookup.name_tc（那欄混了 OpenCC fallback）；拿不到權威源一律失敗不 skip。⚠️ 2026-08-13 更正：`item_lookup` **現在有 `name_tc_source` 欄**（dump/dt/tnze/opencc），故產生器改為只收 `'dump'`——這一欄之前不存在，「有繁中名」與「台服真的有這個名字」在資料上完全無法區分，我就是這樣把 G18 誤判成「可以補了」（它的 name_tc 是国服名機轉，台服解包裡是空字串）。哨兵仍讀原始 CSV：那是**獨立於 sqlite 的第二個證人**，兩邊都錯才會漏
 node tests/i18n.test.mjs           # i18n 三組檢查（字典雙向漂移／覆蓋率／shim 降級）——**薄 wrapper，實作在 portal `tools/i18n-check.mjs`**；本站只留 `i18n.config.json`。拿不到共用哨兵一律失敗不 skip
 
-py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
+py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures / loot.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
+py -3.11 tools/build-i18n-names.py # 上一支跑完必接這支：多語遊戲名詞（地圖／地名／掉落物）重生，任一筆 join 不到即整支失敗
 cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 STOP 交 shawn 正式 deploy）
 ```
 
@@ -91,14 +96,17 @@ cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 
 | `index.html` | shell（portal CDN document.write 注入 header/tokens）+ 三步精靈 DOM |
 | `styles.css` | 工具樣式（用 portal codex token/元件；色值走 `var(--token, fallback)`）|
 | `js/treasure-core.js` | 純函式（UMD）：座標換算 `(coord-1)*SizeFactor/40.96` + 路線優化（map 分組 greedy 最近鄰 + optional 2-opt）+ 遊戲內座標寫法 `formatGameCoord`|
-| `js/app.js` | 三步狀態機 + 裁切卡/全圖渲染 + 房間 UI（含「我的名稱」）+ 對各模組注入依賴（356 行）|
+| `js/app.js` | 三步狀態機 + 裁切卡/全圖渲染 + 房間 UI（含「我的名稱」）+ 對各模組注入依賴（441 行；>500 就再按職責分層，下一候選＝step 2 的補充資訊區塊 loot／gather）|
 | `js/app-modal.js` | 對話框元件（codex-modal）：`confirm` 破壞性操作確認 + `mapView` 挖掘點放大檢視（全圖 + 同區編號標記） |
 | `js/route-map.js` | 區域路線大圖渲染器（純渲染、不碰房間狀態）：SVG 順序線 + 編號標記（done/mine 態）+ 主水晶圖示 `aethIcon` |
+| `js/gather-map.js` | 「去哪採到這張圖」區塊：地區 chips ＋ 點開看該圖採集點位（走 app-modal 的 `mapView`，不另寫 modal）|
 | `js/route-panel.js` | 共享路線面板：清單列／區域大圖／建議順序／清空・清除已完成／複製巨集（依賴由 app.js 注入）|
 | `js/room.js` | 多人房間 client（WebSocket、op-based、自動重連 backoff、6h 自動重連）— 基於 mit-planner `app-room.js` 改 |
 | `js/room-pure.js` | room client 純輔助（UMD、無環境依賴、可單元測試）：重連退避 `backoffDelay` + 房號淨化 `sanitizeJoinCode` + 顯示名淨化 `sanitizeDisplayName` |
 | `worker/src/index.js` | 房間 API：**Durable Object**（`Room` class，op-based `applyOp` 純函式、SQLite storage、6h alarm 過期）— 獨立 wrangler，**Pages 不 build 它** |
-| `data/grades.json`、`data/maps.json`、`data/treasures.json` | 生成資料（`tools/build-data.py` 從 Teamcraft treasures+aetherytes ＋本地 item_dict 產；`maps.json` 含各圖傳送水晶座標）|
+| `data/grades.json`、`data/maps.json`、`data/treasures.json` | 生成資料（`tools/build-data.py` 從 Teamcraft treasures+aetherytes ＋本地 item_dict 產；`maps.json` 含各圖傳送水晶座標；`grades.json` 含 `gatherLevel`＝解包 GatheringItem 的採集等級門檻）|
+| `data/loot.json` | 生成資料（同上腳本，Teamcraft `loot-sources.json` 反查）：各級藏寶圖的**已知**寶箱掉落。**延後載入**（選了等級才抓），繁中訪客在第一步不付這 10 KB |
+| `data/gather.json` | 生成資料（同上腳本，來源＝monorepo item_dict 的 lspl 目錄下 nodes.json）：各採集等級的點位 ＋ 那些地圖的底圖／`sizeFactor`。同樣**延後載入**（21 KB）|
 | `tests/`、`worker/tests/` | golden / drift / op-based 並發正確性 |
 
 ---

@@ -1,5 +1,7 @@
-# Teamcraft 抓取快取（可由 tools/build-data.py 重生；生成的 grades/maps/treasures.json 才 commit）
-data/_teamcraft-treasures.json
+# 上游抓取快取（可由 tools/build-data.py 重生；生成的 grades/maps/treasures/loot.json 才 commit）
+# 用 `_` 前綴 pattern 而不是逐檔列舉：新增一個快取檔時沒人會記得回來補，
+# 而漏補的後果是快取被 commit 並跟著部署出去（tracked 檔就會進 _site）。
+data/_*.json
 
 # Python
 __pycache__/

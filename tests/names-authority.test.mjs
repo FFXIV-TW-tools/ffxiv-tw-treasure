@@ -147,6 +147,39 @@ for (const g of grades) {
 assert.deepStrictEqual(bad, [], '⚠️ 站上顯示的名稱與台服解包不符：\n  ' + bad.join('\n  '));
 n++;
 
+/* ── ②b 掉落物名同樣逐筆核對 ────────────────────────────────────────────
+   loot.json 的**清單**來自 Teamcraft（社群整理，刻意接受不完整），但**名字**必須跟等級名
+   走同一條規矩：台服解包原文。這裡最容易破功的是產生器把 name_tc_source 過濾拿掉——
+   那會讓国服機轉名（如 46171「永護塔路燈」）混進來，而畫面上讀起來完全正常。 */
+{
+  const loot = JSON.parse(readFileSync(join(ROOT, 'data/loot.json'), 'utf8')).loot || {};
+  const shipped = new Set(grades.map((g) => String(g.itemId)));
+  ok(Object.keys(loot).length > 0, 'loot.json 應有內容');
+  ok(Object.keys(loot).every((k) => shipped.has(k)),
+    'loot.json 不得含未出貨等級的 key（那等於把沒上站的圖的資料也發出去）');
+  const lootBad = [];
+  for (const [gid, items] of Object.entries(loot)) {
+    for (const it of items) {
+      const authoritative = rows[String(it.id)];
+      if (!authoritative) { lootBad.push(`${gid} 的掉落 ${it.id}：解包源查無此 id`); continue; }
+      if (it.name !== authoritative) lootBad.push(`${gid}：站上「${it.name}」≠ 台服解包「${authoritative}」`);
+    }
+  }
+  assert.deepStrictEqual(lootBad, [], '⚠️ 掉落物名稱與台服解包不符：\n  ' + lootBad.join('\n  '));
+  n++;
+}
+
+// ── ②c 掉落物的來源標註不得消失 ────────────────────────────────────────
+// 這份資料**不是**台服解包而是社群整理且已知不完整（G17 只有 2 筆）。畫面上沒有這句話，
+// 玩家就會把它當完整清單——而少列幾項在畫面上永遠沒有訊號。
+{
+  const meta = JSON.parse(readFileSync(join(ROOT, 'data/loot.json'), 'utf8'))._meta || {};
+  ok(/Teamcraft/.test(meta.source || ''), 'loot.json _meta.source 必須寫明來源是 Teamcraft');
+  ok(/不完整/.test(meta.source || ''), 'loot.json _meta.source 必須寫明已知不完整');
+  const app = readFileSync(join(ROOT, 'js/app.js'), 'utf8');
+  ok(/社群整理，可能不完整/.test(app), '⚠️ 前端必須在畫面上標明「社群整理，可能不完整」');
+}
+
 // ── ③ `_meta.source` 必須誠實 ──────────────────────────────────────────
 // 產生器換了來源卻沒改 _meta 的話，下一個人會照著錯的說明去追來源。
 {

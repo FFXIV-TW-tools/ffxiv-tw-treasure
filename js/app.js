@@ -14,7 +14,7 @@
   var shared = { points: [], online: 0 };   // 房間共享清單（由 ROOM.onChange 灌入）
 
   var el = {};
-  ['step-grade', 'step-map', 'step-treasure', 'grade-grid', 'map-grid', 'dig-grid',
+  ['step-grade', 'step-map', 'step-treasure', 'grade-grid', 'map-grid', 'dig-grid', 'loot-box', 'gather-box',
    'full-map', 'full-map-info', 'map-title', 'tre-title', 'tre-status', 'map-tabs',
    'room-bar', 'route-panel', 'route-count', 'route-stat', 'route-empty', 'route-list'].forEach(function (id) {
     el[id] = document.getElementById(id);
@@ -97,12 +97,73 @@
       meta.appendChild(badge(t('版本 {v}', { v: g.expansion }), 'gold'));
       if (g.special) meta.appendChild(badge(t('傳送門'), 'neon'));
       card.appendChild(top); card.appendChild(name); card.appendChild(meta);
+      /* 取得方式：解包 GatheringItem 的採集等級門檻（綠圖沒有 —— 它不是採集來的，欄位為 null）。
+         「哪一個採集點會出」解包裡不存在（已掃過 GatheringPointBase 全表零命中），所以只給等級。 */
+      if (g.gatherLevel) {
+        var how = document.createElement('span'); how.className = 'tre-card__how codex-small';
+        how.textContent = t('⛏ 採集 Lv.{lv} 以上的點可能挖到', { lv: g.gatherLevel });
+        card.appendChild(how);
+      }
+      // 挖掘區域速查：不點進去也看得到這張圖會出現在哪幾張地圖
+      var mids = mapsForGrade(g).mids;
+      if (mids.length) {
+        var zonesEl = document.createElement('span'); zonesEl.className = 'tre-card__zones';
+        mids.forEach(function (mid) {
+          var z = document.createElement('span'); z.className = 'tre-card__zone codex-small'; z.textContent = zoneName(mid);
+          zonesEl.appendChild(z);
+        });
+        card.appendChild(zonesEl);
+      }
       card.addEventListener('click', function () { selectGrade(g); });
       el['grade-grid'].appendChild(card);
     });
   }
+  /* 掉落物：**延後載入**（選了等級才抓 data/loot.json）——第一步只選等級的人不必付這 10 KB
+     （monorepo 鐵則「資料只載當前這份會用到的」）。抓一次就留著，切等級不重抓。 */
+  var LOOT = null, lootReq = null;
+  function loadLoot() {
+    if (LOOT) return Promise.resolve(LOOT);
+    if (!lootReq) lootReq = fetch('data/loot.json').then(function (r) { return r.json(); })
+      .then(function (j) { LOOT = j.loot || {}; return LOOT; });
+    return lootReq;
+  }
+  function renderLoot(g) {
+    var box = el['loot-box']; if (!box) return;
+    box.textContent = ''; box.hidden = true;
+    loadLoot().then(function (all) {
+      // 使用者可能已經換了等級 → 舊回應直接丟掉，不要蓋掉現在這張圖的清單
+      if (!state.grade || state.grade.itemId !== g.itemId) return;
+      var items = all[String(g.itemId)] || [];
+      if (!items.length) return;   // 上游沒資料（如綠圖）就整塊不出，不放空殼標題
+      var h = document.createElement('h3'); h.className = 'codex-h3 tre-loot__title';
+      h.textContent = t('這張圖可能開出（已知 {n} 項）', { n: items.length });
+      var note = document.createElement('p'); note.className = 'tre-loot__note codex-small';
+      // ⚠️ 來源與完整度必須寫在畫面上：這份是社群整理（Teamcraft／Garland 同源）且**已知不完整**
+      //    （G17 目前只有 2 筆）。不標的話玩家會把它當完整清單看。
+      note.textContent = t('資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。');
+      var ul = document.createElement('ul'); ul.className = 'tre-loot__items';
+      items.forEach(function (it) {
+        var li = document.createElement('li'); li.className = 'tre-loot__item codex-small';
+        li.textContent = t(it.name);   // 遊戲官方名：字典的生成區塊有 en/ja
+        ul.appendChild(li);
+      });
+      box.appendChild(h); box.appendChild(note); box.appendChild(ul); box.hidden = false;
+    }, function (e) {
+      // 非核心資料：載不到就只顯示一行說明，不擋掉選地圖（但也不靜默）
+      if (!state.grade || state.grade.itemId !== g.itemId) return;
+      var p = document.createElement('p'); p.className = 'tre-loot__note codex-small';
+      p.textContent = t('掉落物資料載入失敗（{err}）', { err: (e && e.message) || e });
+      box.appendChild(p); box.hidden = false;
+    });
+  }
+
+  // 「去哪採到這張圖」走 gather-map.js（自帶延後載入與過期回應保護），依賴由此注入
+  var GATHER = window.TreasureGatherMap
+    ? window.TreasureGatherMap.create({ el: el, TC: TC, MODAL: MODAL }) : null;
+
   function selectGrade(g) {
-    state.grade = g; state.mapId = null; renderMaps(g);
+    state.grade = g; state.mapId = null; renderMaps(g); renderLoot(g);
+    if (GATHER) GATHER.render(g);
     el['map-title'].textContent = t('{grade} · 選擇地圖', { grade: gradeLabel(g) });
     showStep('map'); announce(t('已選 {grade}，請選地圖', { grade: gradeLabel(g) }));
   }
@@ -125,7 +186,7 @@
       var img = document.createElement('img'); img.className = 'tre-mapcard__thumb'; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; if (m.image) img.src = m.image;
       var body = document.createElement('div'); body.className = 'tre-mapcard__body';
       var zone = document.createElement('span'); zone.className = 'tre-mapcard__zone codex-body'; zone.textContent = zoneName(mid);
-      var cnt = document.createElement('span'); cnt.className = 'codex-small'; cnt.textContent = t('{n} 點', { n: counts[mid] });
+      var cnt = document.createElement('span'); cnt.className = 'tre-mapcard__count codex-small'; cnt.textContent = t('{n} 點', { n: counts[mid] });
       body.appendChild(zone); body.appendChild(cnt); card.appendChild(img); card.appendChild(body);
       card.addEventListener('click', function () { selectMap(mid); });
       el['map-grid'].appendChild(card);

@@ -1,8 +1,13 @@
 {
   "_note": "共用哨兵設定（portal tools/i18n-check.mjs 消費）。本站不自寫哨兵——那 483 行裡 89% 與工具內容無關，是 pilot 期就證明過的純樣板。本檔只留真正屬於本站的事實：檔案清單與白名單。",
-  "styles": ["styles.css"],
+  "styles": [
+    "styles.css"
+  ],
   "dictDir": "i18n",
-  "langs": ["en", "ja"],
+  "langs": [
+    "en",
+    "ja"
+  ],
   "entry": "index.html",
   "sources": [
     "index.html",
@@ -10,21 +15,24 @@
     "js/route-panel.js",
     "js/route-map.js",
     "js/app-modal.js",
-    "js/room.js"
+    "js/room.js",
+    "js/gather-map.js"
   ],
   "uiFiles": [
     "js/app.js",
     "js/route-panel.js",
     "js/route-map.js",
     "js/app-modal.js",
-    "js/room.js"
+    "js/room.js",
+    "js/gather-map.js"
   ],
   "mainScripts": [
     "js/app.js",
     "js/route-panel.js",
     "js/route-map.js",
     "js/app-modal.js",
-    "js/room.js"
+    "js/room.js",
+    "js/gather-map.js"
   ],
   "mustReference": [
     "index.html",
@@ -40,22 +48,73 @@
     "js/route-panel.js",
     "js/route-map.js",
     "js/app-modal.js",
-    "js/room.js"
+    "js/room.js",
+    "js/gather-map.js"
   ],
   "allow": [
-    { "id": "route-count", "why": "初值空字串，由 route-panel.js render() 走 t() 填；標了會被 scan 蓋回靜態值" },
-    { "id": "route-stat", "why": "同上（applyOptimize 填）" },
-    { "id": "full-map-info", "why": "同上（app.js renderTreasures 填）" },
-    { "id": "tre-status", "why": "sr-only 播報區，內容一律由 announce() 走 t() 填" },
-    { "id": "map-tabs", "why": "整塊由 app.js renderMapTabs 重建，內容走 t()" },
-    { "id": "room-bar", "why": "整塊由 app.js renderRoomBar 依房間狀態重建，內容走 t()" },
-    { "id": "grade-grid", "why": "佔位文字「… 展開卷軸 …」已標；卡片本體由 renderGrades 重建並走 t()" },
-    { "id": "map-grid", "why": "由 renderMaps 重建，內容走 t()" },
-    { "id": "dig-grid", "why": "由 renderTreasures 重建，內容走 t()" },
-    { "id": "full-map", "why": "純標記層，無文字（aria-label 已走 data-i18n-attr）" },
-    { "id": "route-list", "why": "由 route-panel.js render() 重建，內容走 t()" },
-    { "id": "map-title", "why": "初值「選擇地圖」已標；選等級後由 app.js 走 t() 覆寫" },
-    { "id": "tre-title", "why": "初值「挖掘點」已標；選地圖後由 app.js 走 t() 覆寫" },
-    { "id": "route-empty", "why": "靜態文案已標 data-i18n；hidden 切換不改內容" }
+    {
+      "id": "route-count",
+      "why": "初值空字串，由 route-panel.js render() 走 t() 填；標了會被 scan 蓋回靜態值"
+    },
+    {
+      "id": "route-stat",
+      "why": "同上（applyOptimize 填）"
+    },
+    {
+      "id": "full-map-info",
+      "why": "同上（app.js renderTreasures 填）"
+    },
+    {
+      "id": "tre-status",
+      "why": "sr-only 播報區，內容一律由 announce() 走 t() 填"
+    },
+    {
+      "id": "map-tabs",
+      "why": "整塊由 app.js renderMapTabs 重建，內容走 t()"
+    },
+    {
+      "id": "room-bar",
+      "why": "整塊由 app.js renderRoomBar 依房間狀態重建，內容走 t()"
+    },
+    {
+      "id": "grade-grid",
+      "why": "佔位文字「… 展開卷軸 …」已標；卡片本體由 renderGrades 重建並走 t()"
+    },
+    {
+      "id": "map-grid",
+      "why": "由 renderMaps 重建，內容走 t()"
+    },
+    {
+      "id": "loot-box",
+      "why": "由 renderLoot 依等級重建（含 data/loot.json 的物品名），內容走 t()"
+    },
+    {
+      "id": "dig-grid",
+      "why": "由 renderTreasures 重建，內容走 t()"
+    },
+    {
+      "id": "full-map",
+      "why": "純標記層，無文字（aria-label 已走 data-i18n-attr）"
+    },
+    {
+      "id": "route-list",
+      "why": "由 route-panel.js render() 重建，內容走 t()"
+    },
+    {
+      "id": "map-title",
+      "why": "初值「選擇地圖」已標；選等級後由 app.js 走 t() 覆寫"
+    },
+    {
+      "id": "tre-title",
+      "why": "初值「挖掘點」已標；選地圖後由 app.js 走 t() 覆寫"
+    },
+    {
+      "id": "route-empty",
+      "why": "靜態文案已標 data-i18n；hidden 切換不改內容"
+    },
+    {
+      "id": "gather-box",
+      "why": "由 js/gather-map.js 依等級重建（含 data/gather.json 的地名），內容走 t()"
+    }
   ]
 }

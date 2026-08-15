@@ -6,7 +6,7 @@
 //  4. 每個頂層 tracked 項目都已列入 deploy-allow / deploy-deny（把 CF build 期的分類閘提前到 commit 前）
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -73,7 +73,11 @@ assert.ok(aethTotal >= 60, `主水晶總數異常偏低（${aethTotal}）— 資
 // ── 3. 無死 .tre-* CSS（styles.css 定義的每個都要有人用）──
 // token 邊界比對（非子字串）：class 名前後不得緊接 class 字元 [a-z0-9_-]，
 // 否則父類 `tre-dig` 會被子類 `tre-dig__map` 的子字串「誤判為已使用」→ 真死父類漏抓。
-const src = appJs + modalJs + rmapJs + rpanelJs + roomJs + html;
+// ⚠️ 掃**整個 js/ 目錄**而不是逐檔列舉：新增一支 JS 時沒人會記得回來補這一行，
+//    而漏補的症狀是「新 class 被誤判成死 CSS」＝假紅燈（2026-08-16 新增 gather-map.js 當場踩到）。
+const allJs = readdirSync(join(ROOT, 'js')).filter((f) => f.endsWith('.js'))
+  .map((f) => read('js/' + f)).join('\n');
+const src = allJs + html;
 const defined = new Set([...css.matchAll(/\.(tre-[a-z0-9_-]+)/gi)].map((m) => m[1]));
 const usedAsToken = (cls) => new RegExp('(?<![a-z0-9_-])' + cls + '(?![a-z0-9_-])').test(src);
 const dead = [...defined].filter((cls) => !usedAsToken(cls));

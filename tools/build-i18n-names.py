@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-r"""產生 i18n 字典裡的**遊戲名詞**區塊（地圖名 13 ＋ 地名 40）。
+r"""產生 i18n 字典裡的**遊戲名詞**區塊（地圖名 13 ＋ 地名 40 ＋ 掉落物名）。
 
 用法：python tools/build-i18n-names.py   → 就地改寫 i18n/en.js 與 i18n/ja.js 的標記區塊。
 
@@ -11,6 +11,7 @@ r"""產生 i18n 字典裡的**遊戲名詞**區塊（地圖名 13 ＋ 地名 40�
 來源與 join 路徑（三段都不是機器翻譯，全是 SE 官方 client 字串）：
 
   · 地圖名 ×13：`grades.json.itemId` → 本地 `datamining_tc/{en,ja}_Item.csv`
+  · 掉落物名：`loot.json` 的 item id → 同一份 `{en,ja}_Item.csv`（走同一條路徑，不另開資料源）
   · 地名（zone）×28：`maps.json` 的 map id → 本地 `lspl/maps.json.placename_id`
                      → upstream xivapi `csv/{en,ja}/PlaceName.csv`
   · 地名（region）×12：同上，走 `region_id`
@@ -80,6 +81,12 @@ def collect() -> dict[str, dict[str, str]]:
     grades = json.loads((ROOT / 'data/grades.json').read_text(encoding='utf-8'))['grades']
     maps = json.loads((ROOT / 'data/maps.json').read_text(encoding='utf-8'))['maps']
     lspl = json.loads((DICT / 'lspl/maps.json').read_text(encoding='utf-8'))
+    loot = json.loads((ROOT / 'data/loot.json').read_text(encoding='utf-8'))['loot']
+    # 採集點地圖：範圍**比藏寶圖區大**（如「活著的記憶」沒有挖掘點但有 Lv.100 採集點）
+    # ⇒ 不能只靠 maps.json，漏掉的症狀是英文畫面上零星幾個中文地名。
+    gather_maps = json.loads((ROOT / 'data/gather.json').read_text(encoding='utf-8'))['maps']
+    # 同一個物品會被多張圖掉 → 去重後才 join（{繁中名: item id}）
+    drops = {it['name']: it['id'] for items in loot.values() for it in items}
 
     out = {lang: {} for lang in LANGS}
     gaps = []
@@ -92,7 +99,13 @@ def collect() -> dict[str, dict[str, str]]:
                 out[lang][g['name']] = name
             else:
                 gaps.append(f'{lang}: 地圖 {g["grade"]}(item {g["itemId"]}) 無官方名')
-        for mid, m in maps.items():
+        for tc, iid in drops.items():
+            name = items.get(str(iid))
+            if name:
+                out[lang][tc] = name
+            else:
+                gaps.append(f'{lang}: 掉落物「{tc}」(item {iid}) 無官方名')
+        for mid, m in list(maps.items()) + list(gather_maps.items()):
             e = lspl.get(str(mid), {})
             for tc, pid in ((m.get('zone'), e.get('placename_id')),
                             (m.get('region'), e.get('region_id'))):

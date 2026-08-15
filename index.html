@@ -136,6 +136,7 @@
 <script defer src="js/app-modal.js"></script>
 <script defer src="js/route-map.js"></script>
 <script defer src="js/route-panel.js"></script>
+<script defer src="js/gather-map.js"></script>
 <script defer src="js/app.js"></script>
 <script type="application/ld+json">
 {
@@ -221,6 +222,10 @@
         <button type="button" class="codex-btn codex-btn--ghost" data-back="grade" data-i18n="← 換等級">← 換等級</button>
       </div>
       <div id="map-grid" class="tre-grid tre-grid--map"></div>
+      <!-- 去哪採到這張圖（內容由 js/gather-map.js 依等級重建，走 t()）-->
+      <div id="gather-box" class="tre-gather" hidden></div>
+      <!-- 這張圖可能開出什麼（內容由 app.js renderLoot 依等級重建，走 t()）-->
+      <div id="loot-box" class="tre-loot" hidden></div>
     </section>
 
     <!-- Step 3：挖掘點 -->

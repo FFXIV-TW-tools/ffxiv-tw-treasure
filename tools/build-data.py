@@ -4,6 +4,8 @@
 
 來源（2026-06-22 決策）：
 - 挖掘點 treasures：**Teamcraft** treasures.json（決策 #5，註明來源 Teamcraft）
+- 採集等級 gatherLevel：**xivapi 解包** GatheringItem.GatheringItemLevel（2026-08-16 新增，權威＝SE 解包）
+- 寶箱掉落 loot：**Teamcraft** loot-sources.json（＝Garland 同一份，已對照一致；社群整理，非解包）
 - 地圖 size_factor + 貼圖 URL：本地 data/item_dict/lspl/maps.json（Teamcraft maps 鏡像，map-id keyed）
 - 地區繁中名：本地 data/item_dict/place_names.json（**map-id keyed** — 已驗）
 - 物品繁中名：本地 data/item_dict/item_lookup.sqlite items.**name_tc**（＝台服 client 解包原文，與 datamining_tc/tc_Item.csv 逐字相同）。**零轉換**——2026-08-13 更正，見下方長註解
@@ -18,6 +20,7 @@ import json
 import os
 import sqlite3
 import sys
+import urllib.parse
 import urllib.request
 
 # Windows console 常是 cp950 → ✓/中文輸出會炸；強制 utf-8。
@@ -47,8 +50,14 @@ DICT = os.path.join(ROOT, 'data', 'item_dict')
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, '..', 'data'))
 CACHE = os.path.join(OUT, '_teamcraft-treasures.json')
+LOOT_CACHE = os.path.join(OUT, '_teamcraft-loot-sources.json')
+GATHER_CACHE = os.path.join(OUT, '_xivapi-gather-levels.json')
 TEAMCRAFT_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcraft/'
                  'staging/libs/data/src/lib/json/treasures.json')
+# loot-sources.json：{被掉落的 item id: [來源 id…]}，來源含藏寶圖 item id ⇒ 反查即得「這張圖開得出什麼」。
+TEAMCRAFT_LOOT_URL = ('https://raw.githubusercontent.com/ffxiv-teamcraft/ffxiv-teamcraft/'
+                      'staging/libs/data/src/lib/json/loot-sources.json')
+XIVAPI = 'https://v2.xivapi.com/api'
 
 # 社群分級（高→低）：itemId → (grade 標籤, 版本)。繁中名不寫這裡，從 item_lookup 生成。
 #
@@ -77,23 +86,156 @@ GRADE_ITEMIDS = {iid for iid, _, _ in GRADE_CATALOG}
 SHIPPED_GRADE_FLOOR = 13
 
 
-def fetch_treasures():
-    """抓 Teamcraft treasures.json（快取到 data/_teamcraft-treasures.json）。"""
+def _get(url):
+    req = urllib.request.Request(url, headers={'User-Agent': 'ffxiv-tw-treasure/1.0'})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode('utf-8'))
+
+
+def fetch_cached(url, cache, label, unit='筆'):
+    """抓上游 JSON，快取到 data/_*.json；網路失敗回退快取，兩者皆無即整支失敗。"""
     try:
-        req = urllib.request.Request(TEAMCRAFT_URL, headers={'User-Agent': 'ffxiv-tw-treasure/1.0'})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            data = json.loads(r.read().decode('utf-8'))
-        with open(CACHE, 'w', encoding='utf-8') as f:
+        data = _get(url)
+        with open(cache, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False)
-        print(f'✓ Teamcraft treasures.json 抓取 {len(data)} 點（快取 {CACHE}）')
+        print(f'✓ {label} 抓取 {len(data)} {unit}（快取 {cache}）')
         return data
     except Exception as e:  # noqa: BLE001 — build 腳本，網路失敗回退快取
-        if os.path.exists(CACHE):
-            print(f'⚠ 抓取失敗（{e}），用快取 {CACHE}')
-            with open(CACHE, encoding='utf-8') as f:
+        if os.path.exists(cache):
+            print(f'⚠ {label} 抓取失敗（{e}），用快取 {cache}')
+            with open(cache, encoding='utf-8') as f:
                 return json.load(f)
-        print(f'✗ 抓取失敗且無快取：{e}', file=sys.stderr)
+        print(f'✗ {label} 抓取失敗且無快取：{e}', file=sys.stderr)
         sys.exit(1)
+
+
+def fetch_treasures():
+    return fetch_cached(TEAMCRAFT_URL, CACHE, 'Teamcraft treasures.json', '點')
+
+
+# 綠圖（19770）**沒有 GatheringItem** —— 它不是採集取得的（是從藏寶圖寶箱的傳送門後拿到）。
+# 這是既知事實，所以列成白名單；其餘等級查不到就是資料鏈壞了，必須當場失敗，
+# 不能讓「採集等級」欄靜默變空（畫面上只會少一個標籤，沒有任何錯誤訊號）。
+NO_GATHER_ITEM = {19770}
+
+
+def fetch_gather_levels(item_ids):
+    """xivapi 解包 GatheringItem → {item id: 採集等級}。
+
+    藏寶圖是「採集時隨機額外取得」，**不掛在任何採集點上**（已掃過 GatheringPointBase 全 1425 列
+    與 Teamcraft nodes 的 items／hiddenItems，13 張圖零命中）⇒ 解包裡拿得到的只有這個等級門檻，
+    「哪一個採集點會出」在解包中並不存在，不要再去找一次。
+    """
+    try:
+        out = {}
+        for iid in sorted(item_ids):
+            if iid in NO_GATHER_ITEM:
+                continue
+            res = _get(f'{XIVAPI}/search?sheets=GatheringItem'
+                       f'&query={urllib.parse.quote(f"Item={iid}")}').get('results') or []
+            if not res:
+                continue
+            row = _get(f'{XIVAPI}/sheet/GatheringItem/{res[0]["row_id"]}'
+                       '?fields=GatheringItemLevel.GatheringItemLevel')
+            lv = row['fields']['GatheringItemLevel']['fields']['GatheringItemLevel']
+            out[str(iid)] = lv
+        with open(GATHER_CACHE, 'w', encoding='utf-8') as f:
+            json.dump(out, f, ensure_ascii=False)
+        print(f'✓ xivapi GatheringItem 採集等級 {len(out)} 筆（快取 {GATHER_CACHE}）')
+        return out
+    except Exception as e:  # noqa: BLE001 — 同上，網路失敗回退快取
+        if os.path.exists(GATHER_CACHE):
+            print(f'⚠ 採集等級抓取失敗（{e}），用快取 {GATHER_CACHE}')
+            with open(GATHER_CACHE, encoding='utf-8') as f:
+                return json.load(f)
+        print(f'✗ 採集等級抓取失敗且無快取：{e}', file=sys.stderr)
+        sys.exit(1)
+
+
+# 採集職業動作（對齊 marketboard build_gathering_nodes.py 的 type 表；4/5＝刺魚／釣魚不收——
+# 藏寶圖只從採礦工／園藝工的採集點取得，釣魚點不會出）。
+GATHER_TYPES = {0: 'mine', 1: 'quarry', 2: 'log', 3: 'harvest'}
+
+
+def build_gather_nodes(levels):
+    """本地 lspl/nodes.json → {採集等級: [點位]} ＋ 這些點所在地圖的底圖資訊。
+
+    ⚠️ 這是**推導**，不是解包直說：解包只給「這張圖需要採集 Lv.N」（GatheringItem），
+    沒有任何一筆說「這個採集點會掉這張圖」。我們取的是「等級**恰好等於**門檻的採集點」，
+    因為那就是玩家實際會去刷的點。前端必須標明是依採集等級推導，別讓它讀起來像官方保證。
+
+    ⚠️ `map == 0` 的點（本地 nodes.json 有一批）**丟掉**：不知道在哪張圖就畫不出來，
+    硬畫會標到錯的地方，而畫面上完全看不出來。
+    """
+    with open(os.path.join(DICT, 'lspl', 'nodes.json'), encoding='utf-8') as f:
+        nodes = json.load(f)
+    with open(os.path.join(DICT, 'lspl', 'maps.json'), encoding='utf-8') as f:
+        lspl_maps = json.load(f)
+    with open(os.path.join(DICT, 'place_names.json'), encoding='utf-8') as f:
+        places = json.load(f)
+
+    want = set(levels)
+    out, used, dropped = {str(lv): [] for lv in want}, set(), 0
+    for node in nodes.values():
+        lv, mid = node.get('level'), node.get('map')
+        if lv not in want or node.get('type') not in GATHER_TYPES:
+            continue
+        me = lspl_maps.get(str(mid)) if mid else None
+        if not mid or not me or not me.get('image') or me.get('size_factor') is None:
+            dropped += 1
+            continue
+        out[str(lv)].append({'m': mid, 'x': round(node['x'], 2), 'y': round(node['y'], 2),
+                             't': node['type'], 'lim': bool(node.get('limited')),
+                             'leg': bool(node.get('legendary'))})
+        used.add(mid)
+    # 地名缺一個就整張圖不出（fail-closed）：前端拿 zone 去 t() 查字典，空字串會變成
+    # 「key 是空字串」的缺譯，i18n 哨兵當場紅——而且畫面上是個沒有名字的按鈕。
+    gmaps, nameless = {}, []
+    for mid in sorted(used):
+        me = lspl_maps[str(mid)]
+        zone = places.get(str(mid), {}).get('place')
+        if not zone:
+            nameless.append(mid)
+            continue
+        gmaps[mid] = {'zone': zone, 'sizeFactor': me['size_factor'], 'image': me['image']}
+    if nameless:
+        out = {lv: [p for p in pts if p['m'] not in nameless] for lv, pts in out.items()}
+        print(f'· 採集點地圖無繁中地名、不出貨：{nameless}')
+    print(f'✓ 採集點 {sum(len(v) for v in out.values())} 個 / {len(gmaps)} 張地圖'
+          f'（{dropped} 個因無 map/圖資丟棄）')
+    return out, gmaps
+
+
+def build_loot(shipped):
+    """Teamcraft loot-sources.json 反查 → {藏寶圖 item id: [{id, name}…]}。
+
+    ⚠️ **這一份不是台服解包**，是社群整理（Teamcraft／Garland 同源），且**已知不完整**
+    （2026-08-16 實測：G16 26 筆、G6 32 筆，但 G17 只有 2 筆、綠圖 0 筆）。
+    ⇒ 前端必須標明來源與「已知掉落」，不得讓玩家以為是完整清單。
+    物品**名字**仍走台服解包（name_tc_source='dump'），台服未收錄的物品整筆不出
+    （fail-closed：寧可少列一項，也不放機轉名上站）。
+    """
+    raw = fetch_cached(TEAMCRAFT_LOOT_URL, LOOT_CACHE, 'Teamcraft loot-sources.json')
+    conn = sqlite3.connect(os.path.join(DICT, 'item_lookup.sqlite'))
+    rev = {iid: [] for iid in shipped}
+    for dropped, sources in raw.items():
+        for src in sources:
+            if src in rev and dropped.isdigit():
+                rev[src].append(int(dropped))
+    out, skipped = {}, 0
+    for iid, drops in rev.items():
+        items = []
+        for did in sorted(set(drops)):
+            row = conn.execute('SELECT name_tc, name_tc_source FROM items WHERE id=?', (did,)).fetchone()
+            if row and row[0] and row[1] == 'dump':
+                items.append({'id': did, 'name': row[0]})
+            else:
+                skipped += 1
+        out[str(iid)] = items
+    conn.close()
+    print(f'✓ 掉落物 {sum(len(v) for v in out.values())} 筆'
+          f'（{skipped} 筆台服未收錄，已略過）')
+    return out
 
 
 def load_local():
@@ -119,6 +261,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     raw = fetch_treasures()
     places, maps, names, aeth_raw = load_local()
+    gather = fetch_gather_levels(GRADE_ITEMIDS)
 
     # grades.json —— **台服解包沒有名字的等級一律不出貨**（fail-closed）。
     # 不是「先放上去、名字之後補」：站上顯示的名字是玩家拿回遊戲內搜尋用的，
@@ -132,6 +275,7 @@ def main():
         psize = next((t.get('partySize') for t in raw if t.get('item') == iid), None)
         grades.append({'grade': grade, 'itemId': iid, 'name': name,
                        'partySize': psize, 'expansion': exp,
+                       'gatherLevel': gather.get(str(iid)),
                        'special': grade == '綠圖'})
     if pending:
         print(f'· 台服尚未收錄、暫不出貨：{"、".join(pending)}（解包一有名字就會自動出現）')
@@ -147,6 +291,11 @@ def main():
     used_maps = sorted({t['map'] for t in pts})
 
     gaps = []
+    # 採集等級缺口＝資料鏈壞了（xivapi 欄位改名／sheet 改版），不是「這張圖沒有等級」。
+    # 少一個標籤在畫面上完全沒有訊號 ⇒ 併進 gaps 讓 build 非零 exit。
+    for g in grades:
+        if g['gatherLevel'] is None and g['itemId'] not in NO_GATHER_ITEM:
+            gaps.append(f'{g["grade"]}(item {g["itemId"]}) 無採集等級（GatheringItem 查無）')
 
     # maps.json（enriched：繁中地名 + size_factor + 貼圖 URL）
     out_maps = {}
@@ -175,17 +324,36 @@ def main():
     out_pts = [{'id': t['id'], 'x': round(t['coords']['x'], 2), 'y': round(t['coords']['y'], 2),
                 'map': t['map'], 'partySize': t.get('partySize'), 'item': t['item']} for t in pts]
 
-    meta = {'source': 'Teamcraft (treasures.json) · 傳送水晶 lspl/aetherytes.json（本地）· 物品名 item_lookup.name_tc（台服解包原文，零轉換） · 地名 place_names（本地權威）',
+    # loot.json（寶箱掉落；社群整理來源，與上面三份的權威等級不同 ⇒ _meta 分開寫清楚）
+    loot = build_loot(shipped)
+
+    # gather.json（去哪採到這張圖：等級門檻對應的採集點位）
+    want_levels = sorted({g['gatherLevel'] for g in grades if g['gatherLevel']})
+    gather, gather_maps = build_gather_nodes(want_levels)
+    for lv in want_levels:
+        if not gather[str(lv)]:
+            gaps.append(f'採集 Lv.{lv} 一個點都沒有（nodes.json 壞了？欄位改名？）')
+
+    meta = {'source': 'Teamcraft (treasures.json) · 傳送水晶 lspl/aetherytes.json（本地）· 物品名 item_lookup.name_tc（台服解包原文，零轉換） · 地名 place_names（本地權威） · 採集等級 xivapi GatheringItem（解包）',
             'gradeCount': len(grades), 'mapCount': len(out_maps), 'pointCount': len(out_pts),
             'aetheryteCount': sum(len(m['aetherytes']) for m in out_maps.values())}
+    loot_meta = dict(meta, source='Teamcraft (loot-sources.json)＝社群整理，**已知不完整**'
+                                  ' · 物品名 item_lookup.name_tc（台服解包原文，零轉換）',
+                     lootCount=sum(len(v) for v in loot.values()))
+    gather_meta = {'source': '本地 lspl/nodes.json（採集點位）· 地名 place_names（本地權威）'
+                             ' · 依解包採集等級門檻推導（解包沒有「哪個點掉哪張圖」的表）',
+                   'nodeCount': sum(len(v) for v in gather.values()), 'mapCount': len(gather_maps)}
 
     for fn, obj in [('grades.json', {'_meta': meta, 'grades': grades}),
                     ('maps.json', {'_meta': meta, 'maps': out_maps}),
-                    ('treasures.json', {'_meta': meta, 'treasures': out_pts})]:
+                    ('treasures.json', {'_meta': meta, 'treasures': out_pts}),
+                    ('loot.json', {'_meta': loot_meta, 'loot': loot}),
+                    ('gather.json', {'_meta': gather_meta, 'levels': gather, 'maps': gather_maps})]:
         with open(os.path.join(OUT, fn), 'w', encoding='utf-8') as f:
             json.dump(obj, f, ensure_ascii=False, separators=(',', ':'))
 
-    print(f'✓ 輸出 {len(grades)} grades / {len(out_maps)} maps / {len(out_pts)} points → {OUT}')
+    print(f'✓ 輸出 {len(grades)} grades / {len(out_maps)} maps / {len(out_pts)} points'
+          f' / {loot_meta["lootCount"]} loot / {gather_meta["nodeCount"]} gather nodes → {OUT}')
     if gaps:
         print('✗ 涵蓋率缺口：', file=sys.stderr)
         for g in gaps:
