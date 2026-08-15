@@ -118,51 +118,18 @@
       el['grade-grid'].appendChild(card);
     });
   }
-  /* 掉落物：**延後載入**（選了等級才抓 data/loot.json）——第一步只選等級的人不必付這 10 KB
-     （monorepo 鐵則「資料只載當前這份會用到的」）。抓一次就留著，切等級不重抓。 */
-  var LOOT = null, lootReq = null;
-  function loadLoot() {
-    if (LOOT) return Promise.resolve(LOOT);
-    if (!lootReq) lootReq = fetch('data/loot.json').then(function (r) { return r.json(); })
-      .then(function (j) { LOOT = j.loot || {}; return LOOT; });
-    return lootReq;
-  }
-  function renderLoot(g) {
-    var box = el['loot-box']; if (!box) return;
-    box.textContent = ''; box.hidden = true;
-    loadLoot().then(function (all) {
-      // 使用者可能已經換了等級 → 舊回應直接丟掉，不要蓋掉現在這張圖的清單
-      if (!state.grade || state.grade.itemId !== g.itemId) return;
-      var items = all[String(g.itemId)] || [];
-      if (!items.length) return;   // 上游沒資料（如綠圖）就整塊不出，不放空殼標題
-      var h = document.createElement('h3'); h.className = 'codex-h3 tre-loot__title';
-      h.textContent = t('這張圖可能開出（已知 {n} 項）', { n: items.length });
-      var note = document.createElement('p'); note.className = 'tre-loot__note codex-small';
-      // ⚠️ 來源與完整度必須寫在畫面上：這份是社群整理（Teamcraft／Garland 同源）且**已知不完整**
-      //    （G17 目前只有 2 筆）。不標的話玩家會把它當完整清單看。
-      note.textContent = t('資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。');
-      var ul = document.createElement('ul'); ul.className = 'tre-loot__items';
-      items.forEach(function (it) {
-        var li = document.createElement('li'); li.className = 'tre-loot__item codex-small';
-        li.textContent = t(it.name);   // 遊戲官方名：字典的生成區塊有 en/ja
-        ul.appendChild(li);
-      });
-      box.appendChild(h); box.appendChild(note); box.appendChild(ul); box.hidden = false;
-    }, function (e) {
-      // 非核心資料：載不到就只顯示一行說明，不擋掉選地圖（但也不靜默）
-      if (!state.grade || state.grade.itemId !== g.itemId) return;
-      var p = document.createElement('p'); p.className = 'tre-loot__note codex-small';
-      p.textContent = t('掉落物資料載入失敗（{err}）', { err: (e && e.message) || e });
-      box.appendChild(p); box.hidden = false;
-    });
-  }
-
+  /* step 2 的兩個補充區塊各自成模組（app.js 只注入依賴，不放渲染細節）：
+     · loot-panel.js＝「這張圖可能開出」（藏寶迷宮寶箱 ＋ 挖出的箱子，含查價連結）
+     · gather-map.js＝「去哪採到這張圖」（採集點位）
+     兩者都自帶延後載入與過期回應保護。 */
+  var LOOT = window.TreasureLootPanel ? window.TreasureLootPanel.create({ el: el }) : null;
   // 「去哪採到這張圖」走 gather-map.js（自帶延後載入與過期回應保護），依賴由此注入
   var GATHER = window.TreasureGatherMap
     ? window.TreasureGatherMap.create({ el: el, TC: TC, MODAL: MODAL }) : null;
 
   function selectGrade(g) {
-    state.grade = g; state.mapId = null; renderMaps(g); renderLoot(g);
+    state.grade = g; state.mapId = null; renderMaps(g);
+    if (LOOT) LOOT.render(g);
     if (GATHER) GATHER.render(g);
     el['map-title'].textContent = t('{grade} · 選擇地圖', { grade: gradeLabel(g) });
     showStep('map'); announce(t('已選 {grade}，請選地圖', { grade: gradeLabel(g) }));

@@ -302,10 +302,16 @@ window.FFXIVI18nDict = {
   '碎石': 'Quarrying',
   '採伐': 'Logging',
   '割草': 'Harvesting',
-  '這張圖可能開出（已知 {n} 項）': 'Possible chest rewards ({n} known)',
+  '這張圖可能開出': 'What this map can yield',
+  '🏛 {name}（{n} 項）': '🏛 {name} ({n} items)',
+  '📦 挖出的寶箱（已知 {n} 項）': '📦 Chest at the dig site ({n} known)',
+  '藏寶迷宮寶箱（解包資料，含機率與數量）。': 'Treasure dungeon chest (game data, with drop rate and stack size).',
+  '另有 {n} 項台服尚未收錄官方名稱，暫不顯示。':
+    '{n} more items are not shown — the TW client has no official name for them yet.',
   '資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。':
     'Source: Teamcraft (community-maintained, may be incomplete); item names come from the TW client data.',
-  '掉落物資料載入失敗（{err}）': 'Could not load the reward list ({err})',
+  '點物品可到市場板查價。': 'Tap an item to check its market price.',
+  '在市場板查價：{name}': 'Check market price: {name}',
   '← 換等級': '← Change grade',
   '{grade} · 選擇地圖': '{grade} · Choose zone',
   '已選 {grade}，請選地圖': '{grade} selected. Now choose a zone.',

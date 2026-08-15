@@ -16,7 +16,8 @@
     "js/route-map.js",
     "js/app-modal.js",
     "js/room.js",
-    "js/gather-map.js"
+    "js/gather-map.js",
+    "js/loot-panel.js"
   ],
   "uiFiles": [
     "js/app.js",
@@ -24,7 +25,8 @@
     "js/route-map.js",
     "js/app-modal.js",
     "js/room.js",
-    "js/gather-map.js"
+    "js/gather-map.js",
+    "js/loot-panel.js"
   ],
   "mainScripts": [
     "js/app.js",
@@ -32,7 +34,8 @@
     "js/route-map.js",
     "js/app-modal.js",
     "js/room.js",
-    "js/gather-map.js"
+    "js/gather-map.js",
+    "js/loot-panel.js"
   ],
   "mustReference": [
     "index.html",
@@ -49,7 +52,8 @@
     "js/route-map.js",
     "js/app-modal.js",
     "js/room.js",
-    "js/gather-map.js"
+    "js/gather-map.js",
+    "js/loot-panel.js"
   ],
   "allow": [
     {

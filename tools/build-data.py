@@ -16,6 +16,7 @@ DRY 鐵則：所有繁中名走本地權威源，禁自建對照表。
 
 用法：python tools/build-data.py  → 寫 data/{grades,maps,treasures}.json + 印涵蓋率報告（有缺即 exit 1）。
 """
+import csv
 import json
 import os
 import sqlite3
@@ -206,6 +207,140 @@ def build_gather_nodes(levels):
     return out, gmaps
 
 
+# 藏寶迷宮（傳送門後的副本）→ ContentFinderCondition id。
+#
+# ⚠️ **這張對照表是人工的**，因為解包裡沒有它：`TreasureHuntRank` → `EventItem`（入場 key item）
+#    → `InstanceContent` → `ContentFinderCondition` 整條查過，沒有任何欄位把「圖等級」接到迷宮。
+#    對照本身是遊戲機制（哪張圖開得出哪個傳送門），**內容全部來自解包**（DungeonChest*）。
+# ⚠️ 一張圖可能通往**多個**迷宮（同世代後續改版新增的 shifting 版），故值是 list。
+# ⚠️ 單人圖（partySize 1）挖不到傳送門 ⇒ 沒有迷宮，不是漏填。
+# 接錯世代的防呆＝下面的 patch 閘（掉落物 patch 必須落在該圖版本之後），不靠人記得核對。
+DUNGEON_CATALOG = {
+    12243: [179],        # G8  → 水城寶物庫
+    17836: [268, 586],   # G10 → 運河寶物庫／運河寶物庫神殿
+    19770: [276],        # 綠圖 → 運河寶物庫深層
+    26745: [688, 745],   # G12 → 夢羽寶境／夢羽寶殿
+    36612: [819],        # G14 → 驚奇百寶城
+    39591: [909],        # G15 → 厄爾庇斯育體寶殿
+    43557: [993],        # G17 → 加加財富天坑
+}
+
+
+def tc_names(path):
+    """台服解包 CSV → {id: Name}（三列前導；引號內含換行故必須用 csv.reader）。"""
+    with open(path, encoding='utf-8') as f:
+        rows = list(csv.reader(f))
+    hdr = next(i for i, r in enumerate(rows[:4]) if 'Name' in r)
+    ni = rows[hdr].index('Name')
+    start = hdr + 1
+    if start < len(rows) and rows[start] and rows[start][0] == 'int32':
+        start += 1
+    return {r[0]: r[ni].strip() for r in rows[start:]
+            if r and r[0].isdigit() and len(r) > ni and r[ni].strip()}
+
+
+def item_patch_table():
+    """lspl ItemPatch.csv（區間表）→ 查 item id 的 patch 版本，用於世代防呆。"""
+    with open(os.path.join(DICT, 'lspl', 'ItemPatch.csv'), encoding='utf-8') as f:
+        rng = [(int(r['StartItemId']), int(r['EndItemId']), r['PatchNo'])
+               for r in csv.DictReader(f)]
+
+    def patch_of(iid):
+        for lo, hi, p in rng:
+            if lo <= iid <= hi:
+                return float(p.split('.')[0] + '.' + (p.split('.')[1] if '.' in p else '0'))
+        return None
+    return patch_of
+
+
+def build_dungeon_loot(grades):
+    """藏寶迷宮寶箱掉落（本地解包 DungeonChest ＋ DungeonChestItem）。
+
+    這是「傳送門後的副本」內容——**與藏寶圖本身挖出的箱子是兩回事**，也是玩家真正在問的
+    「G17 的地牢有什麼」。含掉落機率與數量區間，遠比社群整理的 loot-sources 完整
+    （加加財富天坑 35 項 vs loot-sources 的 2 項）。
+    """
+    with open(os.path.join(DICT, 'lspl', 'DungeonChest.csv'), encoding='utf-8') as f:
+        chests = list(csv.DictReader(f))
+    with open(os.path.join(DICT, 'lspl', 'DungeonChestItem.csv'), encoding='utf-8') as f:
+        chest_items = list(csv.DictReader(f))
+    cfc_names = tc_names(os.path.join(DICT, 'datamining_tc', 'tc_ContentFinderCondition.csv'))
+    patch_of = item_patch_table()
+    conn = sqlite3.connect(os.path.join(DICT, 'item_lookup.sqlite'))
+    tclocal = tc_names(os.path.join(DICT, 'datamining_tc', 'tclocal_Item.csv'))
+
+    by_chest = {}
+    for r in chest_items:
+        by_chest.setdefault(r['ChestId'], []).append(r)
+
+    out, gaps = {}, []
+    for g in grades:
+        cfcs = DUNGEON_CATALOG.get(g['itemId'])
+        if not cfcs:
+            continue
+        dungeons = []
+        for cfc in cfcs:
+            name = cfc_names.get(str(cfc))
+            if not name:
+                gaps.append(f'{g["grade"]}：CFC {cfc} 在台服解包查無名稱（id 打錯？）')
+                continue
+            ids = {c['RowId'] for c in chests if c['ContentFinderConditionId'] == str(cfc)}
+            rows, seen, hidden = [], set(), 0
+            for cid in ids:
+                for r in by_chest.get(cid, []):
+                    iid = int(r['ItemId'])
+                    if iid in seen:
+                        continue
+                    seen.add(iid)
+                    nm = resolve_tc_name(conn, iid, tclocal)
+                    if not nm:
+                        # 台服解包沒有官方名（多為国服機轉）⇒ 不出貨，但**要記數**：
+                        # 只是默默少列，清單看起來完整卻少了一半，正是零回饋訊號。
+                        hidden += 1
+                        continue
+                    rows.append({'id': iid, 'name': nm, 'min': int(r['Min']), 'max': int(r['Max']),
+                                 'p': round(float(r['Probability']), 2)})
+            if not rows:
+                gaps.append(f'{g["grade"]}：迷宮「{name}」(CFC {cfc}) 一件掉落都沒有')
+                continue
+            # 世代防呆：對照接錯世代時，掉落物的 patch 會整批早於該圖的版本
+            # （例：把 G17 接到 3.x 的水城寶物庫）。這種錯誤在畫面上完全正常 ⇒ 機械擋。
+            exp = float(g['expansion'])
+            newest = max((patch_of(r['id']) or 0) for r in rows)
+            if newest + 0.5 < exp:
+                gaps.append(f'{g["grade"]}(版本 {exp})：迷宮「{name}」的掉落最新只到 patch {newest}'
+                            '——對照可能接錯世代')
+            rows.sort(key=lambda r: -r['p'])
+            dungeons.append({'cfc': cfc, 'name': name, 'items': rows, 'hidden': hidden})
+        if dungeons:
+            out[str(g['itemId'])] = dungeons
+    conn.close()
+    total = sum(len(d['items']) for ds in out.values() for d in ds)
+    print(f'✓ 藏寶迷宮 {sum(len(v) for v in out.values())} 座 / 掉落 {total} 筆')
+    return out, gaps
+
+
+def resolve_tc_name(conn, iid, tclocal):
+    """台服解包原文，否則 None。
+
+    ⚠️ 收 `dump` **與** `dt`——但 `dt` 必須與 `tclocal_Item.csv` **逐字相同**才算數。
+    2026-08-16 查證：`dt` 的來源（full.sqlite 的 name_tc）就是台服 client 本地解包，
+    只是 `tc_Item.csv` 那一份較舊、很多 7.x 物品是空的（48228「偏光染劑」即是）。
+    先前只收 `dump` 過嚴，把台服真的有官方名的物品也擋掉了。
+    """
+    # 機器轉換來源（国服簡→繁）與 tnze 一律不收 —— 兩者都不是台服官方名。
+    # ⚠️ 這句話刻意寫成 `#` 註解：names-authority 哨兵掃「非註解行」有沒有機轉字樣，
+    #    docstring 不算註解 ⇒ 寫在上面那段裡會被判成「產生器又在做機器轉換」（實際踩過）。
+    row = conn.execute('SELECT name_tc, name_tc_source FROM items WHERE id=?', (iid,)).fetchone()
+    if not row or not row[0]:
+        return None
+    if row[1] == 'dump':
+        return row[0]
+    if row[1] == 'dt' and tclocal.get(str(iid)) == row[0]:
+        return row[0]
+    return None
+
+
 def build_loot(shipped):
     """Teamcraft loot-sources.json 反查 → {藏寶圖 item id: [{id, name}…]}。
 
@@ -222,13 +357,14 @@ def build_loot(shipped):
         for src in sources:
             if src in rev and dropped.isdigit():
                 rev[src].append(int(dropped))
+    tclocal = tc_names(os.path.join(DICT, 'datamining_tc', 'tclocal_Item.csv'))
     out, skipped = {}, 0
     for iid, drops in rev.items():
         items = []
         for did in sorted(set(drops)):
-            row = conn.execute('SELECT name_tc, name_tc_source FROM items WHERE id=?', (did,)).fetchone()
-            if row and row[0] and row[1] == 'dump':
-                items.append({'id': did, 'name': row[0]})
+            nm = resolve_tc_name(conn, did, tclocal)
+            if nm:
+                items.append({'id': did, 'name': nm})
             else:
                 skipped += 1
         out[str(iid)] = items
@@ -327,6 +463,10 @@ def main():
     # loot.json（寶箱掉落；社群整理來源，與上面三份的權威等級不同 ⇒ _meta 分開寫清楚）
     loot = build_loot(shipped)
 
+    # 藏寶迷宮掉落（傳送門後的副本；本地解包，含機率與數量）
+    dungeon, dgaps = build_dungeon_loot(grades)
+    gaps.extend(dgaps)
+
     # gather.json（去哪採到這張圖：等級門檻對應的採集點位）
     want_levels = sorted({g['gatherLevel'] for g in grades if g['gatherLevel']})
     gather, gather_maps = build_gather_nodes(want_levels)
@@ -337,9 +477,11 @@ def main():
     meta = {'source': 'Teamcraft (treasures.json) · 傳送水晶 lspl/aetherytes.json（本地）· 物品名 item_lookup.name_tc（台服解包原文，零轉換） · 地名 place_names（本地權威） · 採集等級 xivapi GatheringItem（解包）',
             'gradeCount': len(grades), 'mapCount': len(out_maps), 'pointCount': len(out_pts),
             'aetheryteCount': sum(len(m['aetherytes']) for m in out_maps.values())}
-    loot_meta = dict(meta, source='Teamcraft (loot-sources.json)＝社群整理，**已知不完整**'
+    loot_meta = dict(meta, source='寶箱＝Teamcraft (loot-sources.json)＝社群整理，**已知不完整**'
+                                  ' · 藏寶迷宮＝本地解包 DungeonChest／DungeonChestItem（含機率與數量）'
                                   ' · 物品名 item_lookup.name_tc（台服解包原文，零轉換）',
-                     lootCount=sum(len(v) for v in loot.values()))
+                     lootCount=sum(len(v) for v in loot.values()),
+                     dungeonCount=sum(len(d['items']) for ds in dungeon.values() for d in ds))
     gather_meta = {'source': '本地 lspl/nodes.json（採集點位）· 地名 place_names（本地權威）'
                              ' · 依解包採集等級門檻推導（解包沒有「哪個點掉哪張圖」的表）',
                    'nodeCount': sum(len(v) for v in gather.values()), 'mapCount': len(gather_maps)}
@@ -347,13 +489,14 @@ def main():
     for fn, obj in [('grades.json', {'_meta': meta, 'grades': grades}),
                     ('maps.json', {'_meta': meta, 'maps': out_maps}),
                     ('treasures.json', {'_meta': meta, 'treasures': out_pts}),
-                    ('loot.json', {'_meta': loot_meta, 'loot': loot}),
+                    ('loot.json', {'_meta': loot_meta, 'loot': loot, 'dungeons': dungeon}),
                     ('gather.json', {'_meta': gather_meta, 'levels': gather, 'maps': gather_maps})]:
         with open(os.path.join(OUT, fn), 'w', encoding='utf-8') as f:
             json.dump(obj, f, ensure_ascii=False, separators=(',', ':'))
 
     print(f'✓ 輸出 {len(grades)} grades / {len(out_maps)} maps / {len(out_pts)} points'
-          f' / {loot_meta["lootCount"]} loot / {gather_meta["nodeCount"]} gather nodes → {OUT}')
+          f' / {loot_meta["lootCount"]} loot / {loot_meta["dungeonCount"]} dungeon loot'
+          f' / {gather_meta["nodeCount"]} gather nodes → {OUT}')
     if gaps:
         print('✗ 涵蓋率缺口：', file=sys.stderr)
         for g in gaps:

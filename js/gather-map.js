@@ -45,8 +45,12 @@
         title: t('{zone} · 採集 Lv.{lv}（{n} 處）', { zone: t(m.zone), lv: lv, n: pts.length }),
         image: m.image,
         markers: pts.map(function (p) {
+          // 標籤直接寫在圖示下（等級＋遊戲內座標）——只放 hover title 的話，手機完全看不到，
+          // 而「要去哪個座標」正是這張圖唯一要回答的事。
           return { pct: TC.coordsToPercent({ x: p.x, y: p.y }, m.sizeFactor),
-                   icon: TYPE_ICON[p.t], title: typeName(p.t) + ' Lv.' + lv };
+                   icon: TYPE_ICON[p.t],
+                   label: 'Lv.' + lv + ' (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ')',
+                   title: typeName(p.t) + ' Lv.' + lv };
         }),
         coordText: t('採礦工／園藝工在這些採集點採集，有機會拿到藏寶圖。'),
       });

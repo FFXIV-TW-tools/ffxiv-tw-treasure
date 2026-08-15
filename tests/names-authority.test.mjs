@@ -17,7 +17,7 @@
 //   **拿不到權威源時一律失敗，不 skip**——skip 在 CI 上與 pass 長得一模一樣，
 //   而這條守的正是「有沒有真的對過答案」。
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -30,7 +30,14 @@ const DICT = join(process.env.FFXIV_PROJECT_ROOT || 'C:/FFXIVProject', 'data', '
    ⇒ `name_tc` 是「官方名與機轉名的混合物，且從消費端分不出來」。拿它當權威源，
    等於讓本哨兵繼承同一個歧義——它要守的正是「顯示名不是機器轉換」。
    直接讀 `tc_Item.csv` 就沒有這個問題：那是台服 client 解包，沒有 fallback 摻進來。 */
-const TC_CSV = join(DICT, 'datamining_tc', 'tc_Item.csv');
+/* ⚠️ 權威源是**兩份**台服解包，取聯集（2026-08-16 擴充）：
+   · `tc_Item.csv`     — 原本唯一的那份，7.x 物品有一大批 Name 是空字串
+   · `tclocal_Item.csv` — 台服 client 本地解包，較新（48228「偏光染劑」只有這份有）
+   兩份都是 SE 台服 client 字串，沒有機器轉換摻入。只認前者的話，會把「台服真的有官方名」
+   誤判成「只有機轉名」而整批擋掉——藏寶迷宮掉落有一半是這樣被擋的（實際踩過）。 */
+const TC_CSVS = [join(DICT, 'datamining_tc', 'tc_Item.csv'),
+                 join(DICT, 'datamining_tc', 'tclocal_Item.csv')];
+const TC_CSV = TC_CSVS[0];
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -122,21 +129,29 @@ function parseCsv(text) {
   return rows;
 }
 
-let rows;
-try {
-  const csv = parseCsv(readFileSync(TC_CSV, 'utf8'));
-  let h = -1;
-  for (let r = 0; r < 3; r++) if (csv[r] && (csv[r].includes('Name') || csv[r].includes('Singular'))) { h = r; break; }
-  ok(h >= 0, 'tc_Item.csv 找不到欄名列（dump 格式變了？）');
-  let ni = csv[h].indexOf('Name'); if (ni < 0) ni = csv[h].indexOf('Singular');
-  const start = h === 0 ? 1 : h + 2;
-  rows = {};
-  for (let i = start; i < csv.length; i++) { const c = csv[i]; if (c && c[0]) rows[c[0]] = (c[ni] || '').trim(); }
-  // 解析健全性：13 筆全查不到多半是解析壞了而不是資料沒有 —— 那正是上面警告的失效模式
-  ok(Object.keys(rows).length > 10000, `tc_Item.csv 只解析出 ${Object.keys(rows).length} 列，解析器可能壞了`);
-} catch (e) {
-  assert.fail(`讀不到 ${TC_CSV}（${e.message.slice(0, 200)}）——同上，不得當成通過`);
+// 兩份解包各自解析，值以「聯集」使用：一個 id 只要在任一份有非空名字，那就是台服官方名。
+const dumps = [];
+for (const path of TC_CSVS) {
+  try {
+    const csv = parseCsv(readFileSync(path, 'utf8'));
+    let h = -1;
+    for (let r = 0; r < 3; r++) if (csv[r] && (csv[r].includes('Name') || csv[r].includes('Singular'))) { h = r; break; }
+    ok(h >= 0, `${path} 找不到欄名列（dump 格式變了？）`);
+    let ni = csv[h].indexOf('Name'); if (ni < 0) ni = csv[h].indexOf('Singular');
+    const start = h === 0 ? 1 : h + 2;
+    const map = {};
+    for (let i = start; i < csv.length; i++) { const c = csv[i]; if (c && c[0]) map[c[0]] = (c[ni] || '').trim(); }
+    // 解析健全性：全查不到多半是解析壞了而不是資料沒有 —— 那正是上面警告的失效模式
+    ok(Object.keys(map).length > 10000, `${path} 只解析出 ${Object.keys(map).length} 列，解析器可能壞了`);
+    dumps.push(map);
+  } catch (e) {
+    assert.fail(`讀不到 ${path}（${e.message.slice(0, 200)}）——同上，不得當成通過`);
+  }
 }
+// 等級名沿用第一份（那 13 筆兩份一致，由來見檔頭）
+const rows = dumps[0];
+// 任一份解包有這個名字就算數（回傳實際命中的字串，供錯誤訊息使用）
+const officialNames = (id) => dumps.map((d) => d[String(id)]).filter((v) => v);
 
 const bad = [];
 for (const g of grades) {
@@ -158,11 +173,26 @@ n++;
   ok(Object.keys(loot).every((k) => shipped.has(k)),
     'loot.json 不得含未出貨等級的 key（那等於把沒上站的圖的資料也發出去）');
   const lootBad = [];
-  for (const [gid, items] of Object.entries(loot)) {
+  const checkItems = (label, items) => {
     for (const it of items) {
-      const authoritative = rows[String(it.id)];
-      if (!authoritative) { lootBad.push(`${gid} 的掉落 ${it.id}：解包源查無此 id`); continue; }
-      if (it.name !== authoritative) lootBad.push(`${gid}：站上「${it.name}」≠ 台服解包「${authoritative}」`);
+      const official = officialNames(it.id);
+      if (!official.length) { lootBad.push(`${label} 的掉落 ${it.id}：兩份解包都查無官方名`); continue; }
+      if (!official.includes(it.name)) lootBad.push(`${label}：站上「${it.name}」≠ 台服解包「${official.join('／')}」`);
+    }
+  };
+  for (const [gid, items] of Object.entries(loot)) checkItems(gid, items);
+
+  /* 藏寶迷宮（本地解包 DungeonChest*）同樣逐筆核對。這份是 2026-08-16 新增的主力資料
+     （加加財富天坑 18 項 vs Teamcraft 的 2 項），品項比 loot 多得多，更需要機械守。 */
+  const dungeons = JSON.parse(readFileSync(join(ROOT, 'data/loot.json'), 'utf8')).dungeons || {};
+  ok(Object.keys(dungeons).length > 0, 'loot.json 應有 dungeons（藏寶迷宮掉落）');
+  ok(Object.keys(dungeons).every((k) => shipped.has(k)), 'dungeons 不得含未出貨等級的 key');
+  for (const [gid, list] of Object.entries(dungeons)) {
+    for (const dg of list) {
+      ok(typeof dg.hidden === 'number',
+        `${gid} 的「${dg.name}」缺 hidden 欄 —— 台服未收錄的品項數必須帶到前端，`
+        + '只是默默少列的話，清單看起來完整卻少了一半');
+      checkItems(`${gid}/${dg.name}`, dg.items);
     }
   }
   assert.deepStrictEqual(lootBad, [], '⚠️ 掉落物名稱與台服解包不符：\n  ' + lootBad.join('\n  '));
@@ -176,8 +206,13 @@ n++;
   const meta = JSON.parse(readFileSync(join(ROOT, 'data/loot.json'), 'utf8'))._meta || {};
   ok(/Teamcraft/.test(meta.source || ''), 'loot.json _meta.source 必須寫明來源是 Teamcraft');
   ok(/不完整/.test(meta.source || ''), 'loot.json _meta.source 必須寫明已知不完整');
-  const app = readFileSync(join(ROOT, 'js/app.js'), 'utf8');
-  ok(/社群整理，可能不完整/.test(app), '⚠️ 前端必須在畫面上標明「社群整理，可能不完整」');
+  /* ⚠️ 掃**整個 js/ 目錄**而不是寫死某一支：這段文字 2026-08-16 從 app.js 搬到 loot-panel.js，
+     逐檔列舉當場變成假紅燈（drift 的死 CSS 閘同一天踩過同一個坑）。 */
+  const allJs = readdirSync(join(ROOT, 'js')).filter((f) => f.endsWith('.js'))
+    .map((f) => readFileSync(join(ROOT, 'js', f), 'utf8')).join('\n');
+  ok(/社群整理，可能不完整/.test(allJs), '⚠️ 前端必須在畫面上標明「社群整理，可能不完整」');
+  ok(/台服尚未收錄官方名稱/.test(allJs),
+    '⚠️ 前端必須講出「另有 N 項台服尚未收錄」——少列一半而畫面上沒訊號，正是這支哨兵要防的形狀');
 }
 
 // ── ③ `_meta.source` 必須誠實 ──────────────────────────────────────────
