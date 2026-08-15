@@ -77,7 +77,9 @@
         var h = document.createElement('h3'); h.className = 'codex-h3 tre-gather__title';
         h.textContent = t('去哪採到這張圖（採集 Lv.{lv}，{n} 處）', { lv: lv, n: pts.length });
         var note = document.createElement('p'); note.className = 'tre-gather__note codex-small';
-        note.textContent = t('依解包的採集等級門檻推導（解包沒有「哪個點掉哪張圖」的表）；點地區看點位。');
+        /* ⚠️ 文案不寫「解包」這種內部術語（Owner 2026-08-16），但**誠實性不能一起丟掉**：
+           「不保證每個點都會出」就是「這是依等級推導、不是官方逐點保證」的玩家語言版。 */
+        note.textContent = t('符合這張圖採集等級的採集點（不保證每個點都會出）；點地區看點位。');
         var list = document.createElement('div'); list.className = 'tre-gather__zones';
         mids.forEach(function (mid) {
           var b = document.createElement('button'); b.type = 'button'; b.className = 'tre-gather__zone codex-small';

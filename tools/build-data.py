@@ -223,6 +223,8 @@ DUNGEON_CATALOG = {
     36612: [819],        # G14 → 驚奇百寶城
     39591: [909],        # G15 → 厄爾庇斯育體寶殿
     43557: [993],        # G17 → 加加財富天坑
+    # 7.3 的「巡夢金庫」（對應 G18）**台服 client 尚未收錄**——`tc_ContentFinderCondition.csv`
+    # 查無此名，所以拿不到 CFC id、現在補不了。台服開放後補一行即可（G18 本身也在等同一件事）。
 }
 
 
@@ -264,6 +266,10 @@ def build_dungeon_loot(grades):
         chests = list(csv.DictReader(f))
     with open(os.path.join(DICT, 'lspl', 'DungeonChestItem.csv'), encoding='utf-8') as f:
         chest_items = list(csv.DictReader(f))
+    # DungeonDrop＝同一座迷宮的其他掉落（只有 item id，沒有機率／數量）。舊寶物庫有一批
+    # 只記在這裡（水城 +52、運河 +23…），不併就等於少列一半；新的三座（819／909／993）沒有。
+    with open(os.path.join(DICT, 'lspl', 'DungeonDrop.csv'), encoding='utf-8') as f:
+        drops = list(csv.DictReader(f))
     cfc_names = tc_names(os.path.join(DICT, 'datamining_tc', 'tc_ContentFinderCondition.csv'))
     patch_of = item_patch_table()
     conn = sqlite3.connect(os.path.join(DICT, 'item_lookup.sqlite'))
@@ -300,6 +306,18 @@ def build_dungeon_loot(grades):
                         continue
                     rows.append({'id': iid, 'name': nm, 'min': int(r['Min']), 'max': int(r['Max']),
                                  'p': round(float(r['Probability']), 2)})
+            for r in drops:
+                if r['ContentFinderConditionId'] != str(cfc):
+                    continue
+                iid = int(r['ItemId'])
+                if iid in seen:
+                    continue
+                seen.add(iid)
+                nm = resolve_tc_name(conn, iid, tclocal)
+                if not nm:
+                    hidden += 1
+                    continue
+                rows.append({'id': iid, 'name': nm})   # 無機率／數量欄 → 前端不顯示那一段
             if not rows:
                 gaps.append(f'{g["grade"]}：迷宮「{name}」(CFC {cfc}) 一件掉落都沒有')
                 continue
@@ -310,7 +328,7 @@ def build_dungeon_loot(grades):
             if newest + 0.5 < exp:
                 gaps.append(f'{g["grade"]}(版本 {exp})：迷宮「{name}」的掉落最新只到 patch {newest}'
                             '——對照可能接錯世代')
-            rows.sort(key=lambda r: -r['p'])
+            rows.sort(key=lambda r: -(r.get('p') or 0))
             dungeons.append({'cfc': cfc, 'name': name, 'items': rows, 'hidden': hidden})
         if dungeons:
             out[str(g['itemId'])] = dungeons

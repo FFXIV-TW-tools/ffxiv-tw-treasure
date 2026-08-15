@@ -71,14 +71,15 @@
         dungeons.forEach(function (dg) {
           // hidden＝台服解包還沒有官方名的品項。**必須講出來**：只是默默少列的話，
           // 清單看起來完整卻少了一半，而畫面上沒有任何訊號（天坑目前 18 顯示 / 17 未收錄）。
-          var note = t('藏寶迷宮寶箱（解包資料，含機率與數量）。');
-          if (dg.hidden) note += t('另有 {n} 項台服尚未收錄官方名稱，暫不顯示。', { n: dg.hidden });
+          // ⚠️ 面向玩家的文案不寫「解包」這種內部術語（Owner 2026-08-16）——只講他要知道的事
+          var note = t('挖到傳送門後進入的藏寶迷宮，寶箱可能開出（含掉落機率與數量）。');
+          if (dg.hidden) note += t('另有 {n} 項台服尚未收錄中文名稱，暫不顯示。', { n: dg.hidden });
           box.appendChild(section(t('🏛 {name}（{n} 項）', { name: t(dg.name), n: dg.items.length }),
                                   note, dg.items, true));
         });
         if (chest.length) {
           box.appendChild(section(t('📦 挖出的寶箱（已知 {n} 項）', { n: chest.length }),
-                                  t('資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。'),
+                                  t('挖掘點寶箱的掉落，由玩家社群整理，可能不完整。'),
                                   chest, false));
         }
         var tip = document.createElement('p'); tip.className = 'tre-loot__note codex-small';

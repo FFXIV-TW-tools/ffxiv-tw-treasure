@@ -42,7 +42,10 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
   ⚠️ **「圖等級 → 藏寶迷宮」的對照在解包裡不存在**（`TreasureHuntRank`→`EventItem`→`InstanceContent`→`CFC` 整條查過都斷開）⇒ `build-data.py` 的 `DUNGEON_CATALOG` 是**人工對照**（一張圖可能通往多個迷宮；單人圖挖不到傳送門所以沒有）。接錯世代的防呆＝**patch 閘**（掉落物的 patch 必須落在該圖版本之後），不靠人記得核對。
   ⚠️ 名稱過濾收 `name_tc_source` 的 `dump` **與** `dt`——後者必須與 `tclocal_Item.csv` 逐字相同才算數（2026-08-16 查證：`dt` 就是台服 client 本地解包，`tc_Item.csv` 那份較舊、7.x 物品多為空字串）。只收 `dump` 會把台服真的有官方名的物品擋掉一半。`opencc`／`tnze` 一律不收。
   ⚠️ 被擋掉的品項**要在畫面上講出來**（`hidden` 欄→「另有 N 項台服尚未收錄官方名稱」）：只是默默少列的話，清單看起來完整卻少了一半，而畫面上沒有任何訊號。
+  ⚠️ 迷宮品項要併 **`DungeonChestItem`（有機率／數量）＋`DungeonDrop`（只有 item id）** 兩張表：舊寶物庫有一批只記在後者（水城 +52、運河 +23…），不併就少列一半；新的三座（驚奇百寶城／育體寶殿／加加財富天坑）沒有 `DungeonDrop` 資料。
+  ⚠️ 對照表已於 2026-08-16 與 Owner 提供的寶物庫列表逐條複核（版本／等級／對應藏寶圖）**九座全數吻合**。7.3 的「巡夢金庫」（對應 G18）台服 client 尚未收錄、拿不到 CFC id，等台服開放再補一行。
   `tests/names-authority.test.mjs` 機械守：名稱逐筆＝兩份解包之一、`hidden` 欄必須在、畫面上必須有來源與未收錄提示。
+- **面向使用者的文案不寫內部術語**（Owner 2026-08-16）：「解包」「dump」「name_tc」這類詞只出現在註解／`_meta`／文件裡，畫面上直接講玩家要知道的事。**但誠實性不能跟著消失**——「這是推導、不保證」要改寫成玩家語言（例：「符合這張圖採集等級的採集點（不保證每個點都會出）」），不是刪掉。`names-authority` 機械守 `t('…')` 內不得出現「解包」。
 - **座標公式 = FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
 - **worker 只導出 function**：workerd 把 module 具名導出當 entrypoint 檢查，導出裸值（number/物件）會讓整支 worker 起不來、`wrangler dev` 直接掛（2026-07-30 B-004：`MAX_CONN` 常數導出 → 本地端到端測試斷了好幾輪都沒人發現）。測試需要常數就導出 getter（`maxConn()`）。
 - **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler（CSP friendly）— 維持此姿態，勿引入 `innerHTML`。
@@ -67,14 +70,14 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 >
 > ⚠️ 它**刻意不併進本 repo 既有的測試 runner**：該檔與 `functions/_middleware.js` 是 13 站逐站複製的樣板（每站只換 `OLD_HOST`／`NEW_ORIGIN` 兩個常數），檔名與介面必須跨站一致，不能為配合各站慣例改寫——改寫等於每站手動調整，正是 monorepo 交接頁一致性哨兵要防的漏抄。**既有測試基線不變。**
 
-> 測試基線 **6 套全綠 · 226 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 40 / i18n 82；names-authority 20→40＝2026-08-16 掉落物名稱逐筆對台服解包（權威源擴為 tc_Item ∪ tclocal_Item 兩份）＋藏寶迷宮掉落＋`hidden` 未收錄數＋畫面標註不得消失；i18n 62→79＝共用哨兵演進＋新增 `js/gather-map.js` 進掃描清單，非本站回歸。以下為 2026-08-13 原文：**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
+> 測試基線 **6 套全綠 · 227 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 41 / i18n 82；names-authority 20→40＝2026-08-16 掉落物名稱逐筆對台服解包（權威源擴為 tc_Item ∪ tclocal_Item 兩份）＋藏寶迷宮掉落＋`hidden` 未收錄數＋畫面標註不得消失；i18n 62→79＝共用哨兵演進＋新增 `js/gather-map.js` 進掃描清單，非本站回歸。以下為 2026-08-13 原文：**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
 > 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
-<!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="40" -->
+<!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="41" -->
 <!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="82" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
 
 ```bash

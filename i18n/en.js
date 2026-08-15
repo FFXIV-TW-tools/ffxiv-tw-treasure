@@ -293,8 +293,8 @@ window.FFXIVI18nDict = {
   // ── Step 2：選地圖 ───────────────────────────────────────────
   '選擇地圖': 'Choose zone',
   '去哪採到這張圖（採集 Lv.{lv}，{n} 處）': 'Where to gather this map (Lv.{lv} nodes, {n} spots)',
-  '依解包的採集等級門檻推導（解包沒有「哪個點掉哪張圖」的表）；點地區看點位。':
-    'Derived from the level requirement in the game data (there is no table saying which node drops which map); tap a zone to see the spots.',
+  '符合這張圖採集等級的採集點（不保證每個點都會出）；點地區看點位。':
+    'Nodes matching this map\'s gathering level — not every node is guaranteed to yield one. Tap a zone to see the spots.',
   '{zone} · 採集 Lv.{lv}（{n} 處）': '{zone} · Lv.{lv} nodes ({n} spots)',
   '採礦工／園藝工在這些採集點採集，有機會拿到藏寶圖。':
     'Gathering at these nodes as a Miner or Botanist can yield a treasure map.',
@@ -305,11 +305,12 @@ window.FFXIVI18nDict = {
   '這張圖可能開出': 'What this map can yield',
   '🏛 {name}（{n} 項）': '🏛 {name} ({n} items)',
   '📦 挖出的寶箱（已知 {n} 項）': '📦 Chest at the dig site ({n} known)',
-  '藏寶迷宮寶箱（解包資料，含機率與數量）。': 'Treasure dungeon chest (game data, with drop rate and stack size).',
-  '另有 {n} 項台服尚未收錄官方名稱，暫不顯示。':
-    '{n} more items are not shown — the TW client has no official name for them yet.',
-  '資料來源 Teamcraft（社群整理，可能不完整）；物品名為台服解包原文。':
-    'Source: Teamcraft (community-maintained, may be incomplete); item names come from the TW client data.',
+  '挖到傳送門後進入的藏寶迷宮，寶箱可能開出（含掉落機率與數量）。':
+    'Chests in the treasure dungeon you enter through the portal — with drop rate and stack size.',
+  '另有 {n} 項台服尚未收錄中文名稱，暫不顯示。':
+    '{n} more items are hidden — the TW client has no Chinese name for them yet.',
+  '挖掘點寶箱的掉落，由玩家社群整理，可能不完整。':
+    'Drops from the chest at the dig site — community-maintained, may be incomplete.',
   '點物品可到市場板查價。': 'Tap an item to check its market price.',
   '在市場板查價：{name}': 'Check market price: {name}',
   '← 換等級': '← Change grade',

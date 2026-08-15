@@ -211,8 +211,12 @@ n++;
   const allJs = readdirSync(join(ROOT, 'js')).filter((f) => f.endsWith('.js'))
     .map((f) => readFileSync(join(ROOT, 'js', f), 'utf8')).join('\n');
   ok(/社群整理，可能不完整/.test(allJs), '⚠️ 前端必須在畫面上標明「社群整理，可能不完整」');
-  ok(/台服尚未收錄官方名稱/.test(allJs),
+  ok(/台服尚未收錄/.test(allJs),
     '⚠️ 前端必須講出「另有 N 項台服尚未收錄」——少列一半而畫面上沒訊號，正是這支哨兵要防的形狀');
+  /* ⚠️ 面向玩家的文案不得出現「解包」這種內部術語（Owner 2026-08-16）。
+     但誠實性不能跟著消失，所以上面兩條照舊守著來源與缺口的說明。 */
+  const uiText = (allJs.match(/t\('[^']*'/g) || []).join('\n');
+  ok(!/解包/.test(uiText), '⚠️ 使用者看得到的字串不得寫「解包」——那是內部術語，玩家看不懂');
 }
 
 // ── ③ `_meta.source` 必須誠實 ──────────────────────────────────────────
