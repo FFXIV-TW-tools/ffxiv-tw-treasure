@@ -34,11 +34,11 @@
       a.target = '_blank'; a.rel = 'noopener noreferrer';
       a.title = t('在市場板查價：{name}', { name: t(it.name) });
       var nm = document.createElement('span'); nm.textContent = t(it.name); a.appendChild(nm);
-      if (withRate) {
-        // 數量區間與機率是解包原值（Min/Max/Probability），不是估算
+      // 機率／數量只有寶箱表那半有（`DungeonDrop` 併進來的那些沒有）⇒ 有才顯示，不要補 0%
+      if (withRate && typeof it.p === 'number') {
         var meta = document.createElement('span'); meta.className = 'tre-loot__rate';
         var qty = it.min === it.max ? '×' + it.min : '×' + it.min + '–' + it.max;
-        meta.textContent = qty + '  ' + it.p + '%';
+        meta.textContent = (it.c ? '#' + it.c + ' ' : '') + qty + '  ' + it.p + '%';
         a.appendChild(meta);
       }
       return a;
@@ -73,6 +73,8 @@
           // 清單看起來完整卻少了一半，而畫面上沒有任何訊號（天坑目前 18 顯示 / 17 未收錄）。
           // ⚠️ 面向玩家的文案不寫「解包」這種內部術語（Owner 2026-08-16）——只講他要知道的事
           var note = t('挖到傳送門後進入的藏寶迷宮，寶箱可能開出（含掉落機率與數量）。');
+          // 機率是「該寶箱」的掉落率，不是逐層——資料裡沒有層數這個維度，別讓玩家誤讀。
+          if (dg.chests > 1) note += t('這裡有 {n} 個寶箱（標示為 #1、#2），機率各自獨立。', { n: dg.chests });
           if (dg.hidden) note += t('另有 {n} 項台服尚未收錄中文名稱，暫不顯示。', { n: dg.hidden });
           box.appendChild(section(t('🏛 {name}（{n} 項）', { name: t(dg.name), n: dg.items.length }),
                                   note, dg.items, true));

@@ -290,10 +290,15 @@ def build_dungeon_loot(grades):
             if not name:
                 gaps.append(f'{g["grade"]}：CFC {cfc} 在台服解包查無名稱（id 打錯？）')
                 continue
-            ids = {c['RowId'] for c in chests if c['ContentFinderConditionId'] == str(cfc)}
+            # ⚠️ **一座迷宮可能有多個寶箱記錄**（運河寶物庫深層／神殿各有 2 個，位置不同），
+            #    而 Probability 是**各箱獨立**的 ⇒ 合併成一份清單會讓兩組機率混在一起看不出來。
+            #    資料層帶 chestNo，前端在多於一箱時分開標示。
+            #    ⚠️ 這張表**沒有「第幾層」的欄位**：機率是該寶箱的掉落率，不是逐層機率。
+            cs = sorted([c for c in chests if c['ContentFinderConditionId'] == str(cfc)],
+                        key=lambda c: int(c['ChestNo']))
             rows, seen, hidden = [], set(), 0
-            for cid in ids:
-                for r in by_chest.get(cid, []):
+            for c in cs:
+                for r in by_chest.get(c['RowId'], []):
                     iid = int(r['ItemId'])
                     if iid in seen:
                         continue
@@ -305,7 +310,8 @@ def build_dungeon_loot(grades):
                         hidden += 1
                         continue
                     rows.append({'id': iid, 'name': nm, 'min': int(r['Min']), 'max': int(r['Max']),
-                                 'p': round(float(r['Probability']), 2)})
+                                 'p': round(float(r['Probability']), 2),
+                                 'c': int(c['ChestNo']) if len(cs) > 1 else 0})
             for r in drops:
                 if r['ContentFinderConditionId'] != str(cfc):
                     continue
@@ -328,8 +334,10 @@ def build_dungeon_loot(grades):
             if newest + 0.5 < exp:
                 gaps.append(f'{g["grade"]}(版本 {exp})：迷宮「{name}」的掉落最新只到 patch {newest}'
                             '——對照可能接錯世代')
-            rows.sort(key=lambda r: -(r.get('p') or 0))
-            dungeons.append({'cfc': cfc, 'name': name, 'items': rows, 'hidden': hidden})
+            # 先按寶箱編號、再按機率高低（同箱的排在一起，機率才讀得出是哪一箱的）
+            rows.sort(key=lambda r: (r.get('c') or 0, -(r.get('p') or 0)))
+            dungeons.append({'cfc': cfc, 'name': name, 'items': rows, 'hidden': hidden,
+                             'chests': len(cs)})
         if dungeons:
             out[str(g['itemId'])] = dungeons
     conn.close()

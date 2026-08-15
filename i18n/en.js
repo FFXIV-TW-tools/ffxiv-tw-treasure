@@ -307,6 +307,8 @@ window.FFXIVI18nDict = {
   '📦 挖出的寶箱（已知 {n} 項）': '📦 Chest at the dig site ({n} known)',
   '挖到傳送門後進入的藏寶迷宮，寶箱可能開出（含掉落機率與數量）。':
     'Chests in the treasure dungeon you enter through the portal — with drop rate and stack size.',
+  '這裡有 {n} 個寶箱（標示為 #1、#2），機率各自獨立。':
+    'There are {n} chests here (marked #1, #2); their drop rates are independent.',
   '另有 {n} 項台服尚未收錄中文名稱，暫不顯示。':
     '{n} more items are hidden — the TW client has no Chinese name for them yet.',
   '挖掘點寶箱的掉落，由玩家社群整理，可能不完整。':
