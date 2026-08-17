@@ -438,6 +438,6 @@ window.FFXIVI18nDict = {
 
   // ── 頁尾 ─────────────────────────────────────────────────────
   '挖掘點資料來源：': 'Dig-site data source:',
-  '；地名 / 物品名為台服 client 解包原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。':
+  '；地名 / 物品名為台服客戶端解包原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。':
     '; zone and item names are taken verbatim from the TW client data. Coordinates use the official FFXIV formula. This is an unofficial fan tool, not affiliated with SQUARE ENIX CO., LTD.',
 };
