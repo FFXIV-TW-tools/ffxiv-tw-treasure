@@ -66,7 +66,12 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
 
 /* ── 通用 grid ── */
 .tre-grid { display: grid; gap: var(--space-3); }
-.tre-grid--grade { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+/* min-height：等級格由 JS 填（HTML 裡先放「… 展開卷軸 …」一行，約 50px），填完是
+   680px（1440）～2340px（390）⇒ 把緊接其後的 footer 推出畫面，390px 實測 CLS 0.135。
+   最終高度隨欄數變動一個量級，逐斷點釘不實際；用 72svh 讓 footer **一開始就在 fold 外**，
+   之後長多少都不計位移（同 ranking #tableWrap／sightseeing .ss-grid 的既有做法）。
+   svh 不用裸 vh：手機網址列收合時 vh 會變，反而自己製造一次位移。 */
+.tre-grid--grade { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); min-height: 72vh; min-height: 72svh; }
 /* 220px：最長繁中地名「庫爾札斯西部高地」(8 字) + 「N 點」在同一行放得下（160px 會折成兩行）*/
 .tre-grid--map { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
