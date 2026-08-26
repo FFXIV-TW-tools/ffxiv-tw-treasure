@@ -380,6 +380,21 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   .tre-grid--dig { justify-content: center; }     /* 手機單欄置中，不靠左留大空白 */
   /* 觸控目標放大（手機第二螢幕核心操作；避免誤觸 ✕ 刪掉隊友的點）*/
   .tre-route-item { gap: var(--space-3); }
+  /* 2026-08-26 行動適配補完：流程步驟鈕實測 77×26、語言切換的 compact 分頁 33–54×18。
+     共用版 `.codex-tab--compact` 是**刻意**做小的（密集場景用），設計系統明文要消費端
+     自己在 `@media (pointer: coarse)` 補尺寸 ⇒ 這裡補，不動共用版。 */
+  .tre-step { min-height: 44px; }
+  /* ⚠️ 語言切換在 `.page-header` 裡，而設計系統規定「page-header 內控制項高度 ≤38px」
+     （超過就撐高整條標題列＝白搬）。所以**不能**改成 min-height:44——改用 `::before` 疊層
+     把命中區撐到 44 高、寬度維持自身（`left/right:0`）以免跟隔壁分頁的疊層互相重疊。 */
+  .codex-tabs--compact .codex-tab--compact { position: relative; }
+  .codex-tabs--compact .codex-tab--compact::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
+  }
   .tre-route-item input[type="checkbox"] { width: 24px; height: 24px; }
   .tre-route-item__btn { min-width: 40px; min-height: 40px; padding: 8px; }
   .tre-fullmap__marker { min-width: 24px; height: 24px; line-height: 22px; }
