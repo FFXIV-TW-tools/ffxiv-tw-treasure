@@ -4,6 +4,7 @@ _routes.json
 data
 favicon-192.png
 favicon.ico
+favicon.svg
 functions
 index.html
 js
