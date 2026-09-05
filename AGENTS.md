@@ -64,15 +64,8 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 ## VERIFY（改動後必跑）
 
 <!-- B-048-HANDOFF -->
-> 2026-09-02 起 `_middleware.js` 對舊 host 回 **HTTP 301**（GSC 實查：Google 否決 canonical、把 pages.dev 選成標準網址；inline JS 跳轉對爬蟲無效）；可導覽路徑列回 `_routes.json`。
->
-> **交接頁契約（B-048 Task 4）**——改 `functions/_middleware.js`／`_routes.json`／`tests/route-manifest.json` 後必跑：
->
-> ```bash
-> node tests/handoff.test.mjs
-> ```
->
-> ⚠️ 它**刻意不併進本 repo 既有的測試 runner**：該檔與 `functions/_middleware.js` 是 13 站逐站複製的樣板（每站只換 `OLD_HOST`／`NEW_ORIGIN` 兩個常數），檔名與介面必須跨站一致，不能為配合各站慣例改寫——改寫等於每站手動調整，正是 monorepo 交接頁一致性哨兵要防的漏抄。**既有測試基線不變。**
+> **舊網址交接機制已於 2026-09-05 退役**：舊 `*.pages.dev` host 的 301 改由 Cloudflare **帳號層 Bulk Redirects** 在邊緣執行，本 repo 不再有 functions 層的 middleware、HTML 也不再有 inline 交接腳本（`?stay` 救援門一併結束）。
+> `_routes.json` 的 include 只留 API 代理路徑（HTML 路徑不進 Pages Functions、不再計費）；交接測試（handoff.test）與路由清單（route-manifest）已刪。
 
 > 測試基線 **6 套全綠 · 227 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 41 / i18n 82；names-authority 20→40＝2026-08-16 掉落物名稱逐筆對台服解包（權威源擴為 tc_Item ∪ tclocal_Item 兩份）＋藏寶迷宮掉落＋`hidden` 未收錄數＋畫面標註不得消失；i18n 62→79＝共用哨兵演進＋新增 `js/gather-map.js` 進掃描清單，非本站回歸。以下為 2026-08-13 原文：**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
 > 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
