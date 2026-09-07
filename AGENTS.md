@@ -1,74 +1,74 @@
 # AGENTS.md — ffxiv-tw-treasure
 
-FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比對謎題圖找挖掘座標（單人純查詢）；多人＝房間共享路線（op-based DO，即時同步、自動排最省動線）。FFXIV-TW-tools portal 之一。
+FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比對謎題圖找挖掘座標；多人＝房間共享路線（op-based DO，即時同步、自動排最省動線）。FFXIV-TW-tools portal 之一。
 
-- **線上**：https://ffxiv-tw-treasure.pages.dev/（Cloudflare Pages · private repo `FFXIV-TW-tools/ffxiv-tw-treasure`）
+- **線上**：https://treasure.xivtc.com/（CF Pages · private repo `FFXIV-TW-tools/ffxiv-tw-treasure`）
 - **協作後端**：`ffxiv-tw-treasure-room.ffxiv-tw-tools.workers.dev`（Worker + Durable Object + WebSocket）
-- **本機預覽**：`py -m http.server 8799` → 127.0.0.1:8799（需 portal CDN：`svc start portal`，否則 codex 樣式/FFXIVToast 不載）
+- **本機預覽**：`py -m http.server 8799` → 127.0.0.1:8799（需 portal CDN：`svc start portal`，否則 codex 樣式／FFXIVToast 不載）
+
+> **本檔＝規則層**（做什麼／禁什麼／權威在哪／怎麼驗證），每 session 常駐；事故經過、實測數字、拍板日期＝`docs/rules-rationale.md`（**同名段對應**）。
 
 ---
 
 ## 定位與規模
 
-- **規模級別：M（中型，DEVLOOP §5）**——單一產品目的、單 repo 心智可含（~1.8k 行源碼），但含**兩個鬆耦合子系統**：① 純靜態前端查詢（挖掘點資料打包站內、零後端依賴）② Cloudflare Durable Object 房間後端（WebSocket 即時協作、op-based 協定）＋golden 測試閘。行數接近 S/M 邊界但因有獨立後端子系統與並發協定判 M；預設完整循環、可逆單檔小修走旁路。**非 L**（無需分解層、無 Gate 0）。
-- external 公開工具，獨立 git repo（自帶 `.git`），與 monorepo 解耦；本 repo 自帶 DEVLOOP 工件（本檔＋`CHANGELOG.md`＋`docs/BACKLOG.md`）。
-- 規則層級：改動前先讀本檔鐵則；衝突時 **本 repo > external > monorepo project > global**。
+- **規模級別：M（DEVLOOP §5）**——~1.8k 行，兩個鬆耦合子系統：① 純靜態前端查詢（零後端依賴）② Durable Object 房間後端（op-based WebSocket）。預設完整循環、可逆單檔小修走旁路。**非 L**（無分解層、無 Gate 0）。
+- external 公開工具，獨立 git repo。規則衝突時 **本 repo > external > monorepo project > global**。
 
 ---
 
 ## 架構鐵則（違反易壞）
 
-- **協作後端用 Durable Object，不用 KV**：presence 靠 `getWebSockets().length`（0 storage 寫）；op-based＝client 送操作、DO 單執行緒序列套 `applyOp` 再廣播 → **並發加點不互蓋**（勿改回「整份覆蓋」，那正是 mit 早期並發掉點的坑）。
-- **不要樂觀 toast 假成功**（2026-07-04 健檢）：斷線/重連視窗內 `room.js send()` 會靜默丟棄 op（`ws.readyState!==1`）。送任何 op（add/remove/done/order/clear）前**必先 `ensureConnected()`**（兩層 gate：`isInRoom()`→`isConnected()`），未連上給「連線中」提示、**不可**先跳「已加入」成功 toast → 否則使用者無感掉點，正面違反工具核心承諾「多人清單不掉點」。
-- **破壞性操作對全隊權威清單生效、DO 無 undo**（2026-07-04 健檢）：清空 / 清除已完成 / 移除**隊友的**點，一律過 `confirmModal(...)` 二次確認 + 成功 toast。刪**自己的**點一鍵即可（不擋正當協作）。
-- **確認框依 portal codex-modal，不用原生 `confirm()`**：用 `js/app-modal.js` 的 `TreasureModal.confirm()`（app.js 以 `confirmModal()` 薄包；`.codex-modal-overlay/.codex-modal` + `.codex-btn--danger` + `FFXIVA11y.trapFocus`，回 Promise<boolean>）。設計系統要求 ESC + overlay 點擊關閉。
-- **root `package.json` 不可設 `"type":"module"`**（2026-07-04 踩過）：`treasure-core.js` 是 UMD（`module.exports`），設了會把它當 ESM → `.mjs` 測試的 `import TC from` default-import 失效。root 保持 CJS；`.mjs` 測試本就 ESM 不受影響。`worker/` 自帶 `"type":"module"`（worker code 是 ESM）不衝突。
-- **`DIG_W/DIG_H`(app.js) ↔ `--dig-w/--dig-h`(styles.css) 雙寫必須同值**：裁切卡偏移用 JS 常數、卡片視窗尺寸用 CSS，漂移 → pin 偏離挖掘點。`tests/drift.test.mjs` 機械守（改動後跑 `npm test`）。
-- **`improve2Opt`（2-opt）是閉環假設**（尾端 `(k+1)%length` 幻邊）：本工具是**開放路徑**（`calcTotalDistance` 只累加 n-1 段）。目前 `use2Opt` 預設關、無產品呼叫者；啟用前先修尾端幻邊，且測試用**固定 golden `deepEqual`**釘行為，**勿用**「≤ 非2opt」單調斷言（開放路徑下會 flaky）。
-- **外部圖片主機一律同步 `_headers` 的 CSP `img-src`**：資料重建可能讓上游換網域（2026-07-30 實踩：地圖網址換 v2.xivapi.com，CSP 沒跟 → 線上地圖全黑）。**本機 `python -m http.server` 不套 `_headers`，CSP 問題本地測不出來**；`tests/drift.test.mjs` 已機械守（圖片主機 ⊆ img-src 白名單）。
-- **地圖標記一律用遊戲原生圖示，不用 emoji**（2026-08-16 補；與下一條同一個坑）：採集點走 xivapi `/i/060000/`（060438 採掘／060437 碎石／060433 採伐／060432 割草），權威表＝marketboard 的 `NODE_TYPE_ICON`。視覺處理也要照抄該站 `.map-pin-img`：**30px ＋ 青色光暈 ＋ 黑色投影**——遊戲節點圖示是白色線稿，直接貼在米色地圖上幾乎看不見（實測：圖片有載入、定位也對，畫面上就是找不到），傳送點那套淡陰影不夠。
-- **地圖上的傳送點沿用既有實作**：圖示＝主水晶 `060453`（22px，xivapi），與 marketboard 的 map_view 模組（external/ffxiv-tw-marketboard 下 modules 目錄）同一組（**勿自創圖示／emoji**——該檔已記「emoji 在米色地圖上幾乎看不到」）；資料＝monorepo item_dict 的 lspl 目錄下 aetherytes.json（本地權威；勿接 Teamcraft 網路檔，內容相同）；**只收 type 0 主水晶**，type 1 是以太之光＝出口／換圖點，不是傳送目的地（2026-07-30 Owner 判定）。
-- **繁中至上 / 繁中名一律台服解包原文、零機器轉換**（2026-08-13 更正）：物品名 = `item_lookup.name_tc` **且 `name_tc_source='dump'`**；地名 = `place_names.json`（map-id keyed）。**禁自建對照表、禁 OpenCC 機轉**。
-  ⚠️ 本行原文是「物品名 = `name_sc → OpenCC s2twp`（`name_tc` 對藏寶圖是通用『地圖Gxx』**錯名**）」——**那個括號裡的判斷是錯的，而它就是 bug 的來源**：「陳舊的地圖G17」正是台服 client 出貨的名字（日服同為編號式 `古ぼけた地図G17`，只有英文用皮名）。照那句話做出來的站顯示的是**国服名機轉**，玩家拿回遊戲內搜尋找不到，而畫面上完全看不出問題。
-  ⚠️ 另一個更隱蔽的陷阱：**「`item_lookup` 有繁中名」不等於「台服有這個名字」**。G18(46185) 的 `name_tc` 有值（国服名機轉），但台服解包裡是**空字串** ⇒ 判斷必須看 `name_tc_source`，不能只看有沒有值。
-  ⚠️ **多語（en/ja）名詞不進資料檔**：由 `tools/build-i18n-names.py` 生成到 `i18n/en.js`／`i18n/ja.js` 的標記區塊——字典只在切外語時才載入 ⇒ 繁中訪客一個位元組都不用付（monorepo 鐵則「資料只載當前這份會用到的」）。
-- **「藏寶圖從哪個採集點掉」在解包裡不存在，別再查一次**（2026-08-16 查證）：`GatheringItem` **有**藏寶圖（G17→`GatheringItemLevel` 100＝採集等級門檻，站上那行「⛏ 採集 Lv.N 以上的點可能挖到」就是它），但掃過 `GatheringPointBase` 全 1425 列與 Teamcraft `nodes.json` 的 `items`／`hiddenItems`，**13 張圖零命中** ⇒ 它是「採集時隨機額外取得」，不掛在任何採集點上。
-  ⇒ 站上的「去哪採到這張圖」（`data/gather.json` ＋ `js/gather-map.js`）是**依等級門檻推導**：取 `level` **恰好等於**門檻的採集點（來源＝monorepo item_dict 的 lspl 目錄下 nodes.json，與 aetherytes 同一份權威；只收 type 0–3，4/5＝刺魚／釣魚不會出圖）。**畫面上必須寫明是推導**，不得寫成官方保證，也不得自創地點清單。
-  ⚠️ 已知缺口：`nodes.json` 有一批節點 `map == 0`（2026-08-16 實測丟掉 197 個）——不知道在哪張圖就畫不出來，硬畫會標到錯的位置而畫面上完全正常 ⇒ 一律丟棄。所以點數是**下限**，不是全部。
-- **掉落物分兩種來源，語意不同、不得混成一份清單**（`data/loot.json`）：
-  - `dungeons`＝**藏寶迷宮**（傳送門後的副本）寶箱，來源＝本地解包 `DungeonChest`／`DungeonChestItem`，**含掉落機率與數量區間**。這是玩家問「G17 的地牢有什麼」時要的東西（加加財富天坑 18 項 vs 下面那份的 2 項）。
-  - `loot`＝**藏寶圖本身挖出的箱子**，來源＝Teamcraft `loot-sources.json`（社群整理，**已知不完整**，G17 只有 2 筆、綠圖 0 筆）。
-  混成一份的話，只有前者有的機率欄會讓後者看起來也是「已知機率」。
-  ⚠️ **「圖等級 → 藏寶迷宮」的對照在解包裡不存在**（`TreasureHuntRank`→`EventItem`→`InstanceContent`→`CFC` 整條查過都斷開）⇒ `build-data.py` 的 `DUNGEON_CATALOG` 是**人工對照**（一張圖可能通往多個迷宮；單人圖挖不到傳送門所以沒有）。接錯世代的防呆＝**patch 閘**（掉落物的 patch 必須落在該圖版本之後），不靠人記得核對。
-  ⚠️ 名稱過濾收 `name_tc_source` 的 `dump` **與** `dt`——後者必須與 `tclocal_Item.csv` 逐字相同才算數（2026-08-16 查證：`dt` 就是台服 client 本地解包，`tc_Item.csv` 那份較舊、7.x 物品多為空字串）。只收 `dump` 會把台服真的有官方名的物品擋掉一半。`opencc`／`tnze` 一律不收。
-  ⚠️ 被擋掉的品項**要在畫面上講出來**（`hidden` 欄→「另有 N 項台服尚未收錄官方名稱」）：只是默默少列的話，清單看起來完整卻少了一半，而畫面上沒有任何訊號。
-  ⚠️ 迷宮品項要併 **`DungeonChestItem`（有機率／數量）＋`DungeonDrop`（只有 item id）** 兩張表：舊寶物庫有一批只記在後者（水城 +52、運河 +23…），不併就少列一半；新的三座（驚奇百寶城／育體寶殿／加加財富天坑）沒有 `DungeonDrop` 資料。
-  ⚠️ 對照表已於 2026-08-16 與 Owner 提供的寶物庫列表逐條複核（版本／等級／對應藏寶圖）**九座全數吻合**。7.3 的「巡夢金庫」（對應 G18）台服 client 尚未收錄、拿不到 CFC id，等台服開放再補一行。
-  `tests/names-authority.test.mjs` 機械守：名稱逐筆＝兩份解包之一、`hidden` 欄必須在、畫面上必須有來源與未收錄提示。
-- **面向使用者的文案不寫內部術語**（Owner 2026-08-16）：「解包」「dump」「name_tc」這類詞只出現在註解／`_meta`／文件裡，畫面上直接講玩家要知道的事。**但誠實性不能跟著消失**——「這是推導、不保證」要改寫成玩家語言（例：「符合這張圖採集等級的採集點（不保證每個點都會出）」），不是刪掉。`names-authority` 機械守 `t('…')` 內不得出現「解包」。
-- **座標公式 = FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（移植時對 reference 跑過 parity）。
-- **worker 只導出 function**：workerd 把 module 具名導出當 entrypoint 檢查，導出裸值（number/物件）會讓整支 worker 起不來、`wrangler dev` 直接掛（2026-07-30 B-004：`MAX_CONN` 常數導出 → 本地端到端測試斷了好幾輪都沒人發現）。測試需要常數就導出 getter（`maxConn()`）。
-- **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler（CSP friendly）— 維持此姿態，勿引入 `innerHTML`。
-- **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 408 行（2026-07-30 由 505 行按職責拆出 `app-modal.js` 對話框／`route-map.js` 區域大圖／`route-panel.js` 共享路線面板），其餘各檔偏小。**再逼近 500 就繼續按職責分層**（下一候選＝三步狀態機 vs 裁切卡渲染），勿硬塞。
+### 協作後端（Durable Object）
+
+- **用 Durable Object，不用 KV**：presence 靠 `getWebSockets().length`（0 storage 寫）。
+- **op-based**：client 送操作、DO 單執行緒序列套 `applyOp` 再廣播 → 並發加點不互蓋。**勿改回「整份覆蓋」**。
+- **送任何 op（add/remove/done/order/clear）前必先 `ensureConnected()`**（`isInRoom()`→`isConnected()`），未連上給「連線中」提示；**不可先跳成功 toast**（假成功＝使用者無感掉點）。
+- **破壞性操作過 `confirmModal(...)` 二次確認＋成功 toast**：清空／清除已完成／移除**隊友的**點；刪**自己的**點一鍵即可。
+- **worker 只導出 function**：導出裸值會讓整支 worker 起不來；要常數就導出 getter（`maxConn()`）。
+- **動 `applyOp` 協定的部署順序：worker 先 deploy、前端後 push。**
+
+### 前端與 UI
+
+- **確認框用 `js/app-modal.js` 的 `TreasureModal.confirm()`，不用原生 `confirm()`**（app.js 以 `confirmModal()` 薄包；`.codex-modal-overlay/.codex-modal` + `.codex-btn--danger` + `FFXIVA11y.trapFocus`，支援 ESC／overlay 關閉）。
+- **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler；勿引入 `innerHTML`。
+- **地圖標記一律遊戲原生圖示，不用 emoji**（權威＝marketboard 的 `NODE_TYPE_ICON`／map_view 模組，不自創）：採集點 xivapi `/i/060000/`（060438 採掘／060437 碎石／060433 採伐／060432 割草），視覺照抄該站 `.map-pin-img`（**30px＋青色光暈＋黑色投影**）；傳送點＝主水晶 `060453`（22px），資料＝`<monorepo>/data/item_dict/lspl/aetherytes.json`（勿接 Teamcraft）、**只收 type 0**。
+- **`#grade-grid` 必須預留首屏高度**：`min-height: 72svh`（用 `svh` 非 `vh`），footer 一開始就在 fold 外。哨兵＝`<monorepo>/tools/check-cls.mjs`（**逐寬度**掃）。
+- `drift.test.mjs` 守兩條雙寫：**`DIG_W/DIG_H`(app.js) ↔ `--dig-w/--dig-h`(styles.css) 必須同值**；**外部圖片主機必須同步 `_headers` 的 CSP `img-src`**（本機 `http.server` 不套 `_headers`，本地測不出 CSP 問題）。
+- **面向使用者的文案不寫內部術語**（Owner 2026-08-16）：「解包」「dump」「name_tc」只進註解／`_meta`／文件；但「這是推導、不保證」要改寫成玩家語言、不得刪掉（`names-authority` 守 `t('…')` 不得出現「解包」）。
+- **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 408 行；再逼近 500 就按職責分層（下一候選＝三步狀態機／裁切卡渲染）。
+- 改 UI／CSS 前先 Read **../ffxiv-tw-tools-portal/_DESIGN-SYSTEM.md**（設計權威，不憑記憶寫）；色值走 `var(--token, fallback)`，勿裸寫 hex/rgba。
+
+### 資料與名稱權威
+
+- **繁中名一律台服解包原文、零機器轉換**：物品名＝`item_lookup.name_tc` **且 `name_tc_source` ∈ {`dump`, `dt`}**（`dt` 須與 `tclocal_Item.csv` 逐字相同才算數；`opencc`／`tnze` 不收）；地名＝`place_names.json`（map-id keyed）。**禁自建對照表、禁 OpenCC 機轉**；判斷**必須看 `name_tc_source`，不能只看有沒有值**。
+- **被擋掉的品項要在畫面上講出來**：`hidden` 欄 →「另有 N 項台服尚未收錄官方名稱」。
+- **多語（en/ja）名詞不進資料檔**：`tools/build-i18n-names.py` 生成到 `i18n/en.js`／`ja.js` 標記區塊，切外語才載入。
+- **「藏寶圖從哪個採集點掉」在解包裡不存在，別再查一次**（由來見 rationale）。站上「去哪採到這張圖」是**依等級門檻推導**：取 `level` **恰好等於** `grades.json` 的 `gatherLevel` 的採集點（來源＝`<monorepo>/data/item_dict/lspl/nodes.json`，只收 type 0–3；`map == 0` 丟棄 ⇒ 點數是**下限**）。**畫面必須寫明是推導**，不得寫成官方保證、不得自創地點清單。
+- **掉落物兩種來源不得混成一份清單**（`data/loot.json`）：`dungeons`＝藏寶迷宮寶箱，本地解包 **`DungeonChest`／`DungeonChestItem` ＋ `DungeonDrop` 兩張表必須併**，含機率與數量；`loot`＝挖出的箱子，Teamcraft `loot-sources.json`（**已知不完整**）。`DUNGEON_CATALOG`（`build-data.py`）是**人工對照**，防呆＝**patch 閘**（掉落物 patch 須落在該圖版本之後）。
+- `tests/names-authority.test.mjs` 守：名稱逐筆＝兩份原始解包 CSV 之一、`hidden` 欄必須在、畫面上必須有來源與未收錄提示；拿不到權威源一律失敗不 skip。
+
+### 建置與演算法
+
+- **座標公式＝FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（勿自創）。
+- **root `package.json` 不可設 `"type":"module"`**（`treasure-core.js` 是 UMD）；`worker/` 自帶 `"type":"module"` 不衝突。
+- **`improve2Opt`（2-opt）是閉環假設**、本工具是**開放路徑**；`use2Opt` 預設關、無產品呼叫者。啟用前先修尾端幻邊，測試用**固定 golden `deepEqual`**，**勿用**「≤ 非 2opt」單調斷言（會 flaky）。
+
+### 🔒 部署面（fail-closed，勿回退）
+
+- 部署**不是「發佈 repo 根目錄」**：`deploy-prepare.sh` 依 `deploy-allow.txt` 產出 `_site/`（CF Build command＝`sh deploy-prepare.sh`、output＝`_site`）。
+- **頂層新增任何檔案／資料夾就得當場分類**：站台資產進 `deploy-allow.txt`、內部資產進 `deploy-deny.txt`，未分類 → build 直接失敗。改完跑 `sh deploy-prepare.sh` 確認印「✓ 部署輸出就緒」。
+- 腳本改動禁忌／並行安全／部署後驗（帶 cache-bust）＝`.claude/rules/deploy-surface.md`（**Claude 讀到 `deploy-*` 檔才載入；其他 agent 手動讀**）。
 
 ---
-
-## 改 UI / CSS 前
-
-先 Read `../ffxiv-tw-tools-portal/_DESIGN-SYSTEM.md`（codex 元件 / token / modal / `.codex-tablet` padding 鐵則）— 設計權威單一來源，不憑記憶寫。色值一律走 `var(--token, fallback)` 模式（token 優先、CDN 失效時 fallback 兜底），勿裸寫 hex/rgba。
-
----
-
-- **CLS：`#grade-grid` 必須預留首屏高度**（2026-08-23）。等級格由 JS 填（HTML 裡先放「… 展開卷軸 …」一行，約 50px），填完是 680px（1440）～**2340px（390）** ⇒ 把緊接其後的 footer 推出畫面，390px 實測 CLS 0.135。最終高度隨欄數變動一個量級，逐斷點釘不實際 ⇒ 用 `min-height: 72svh` 讓 footer **一開始就在 fold 外**（同 ranking `#tableWrap`／sightseeing `.ss-grid`）。`svh` 不用裸 `vh`。修後 1440/1280/900/600/390＝0.015/0.019/0.025/0.051/0.054。哨兵＝`<monorepo>/tools/check-cls.mjs`（**逐寬度**掃；本站桌機 0.032 看起來沒事，手機才是 0.124）。
 
 ## VERIFY（改動後必跑）
 
 <!-- B-048-HANDOFF -->
-> **舊網址交接機制已於 2026-09-05 退役**：舊 `*.pages.dev` host 的 301 改由 Cloudflare **帳號層 Bulk Redirects** 在邊緣執行，本 repo 不再有 functions 層的 middleware、HTML 也不再有 inline 交接腳本（`?stay` 救援門一併結束）。
-> `_routes.json` 的 include 只留 API 代理路徑（HTML 路徑不進 Pages Functions、不再計費）；交接測試（handoff.test）與路由清單（route-manifest）已刪。
+> **舊網址交接機制 2026-09-05 退役**（見 rationale）：本 repo 無 middleware、無 inline 交接腳本，`_routes.json` include 只留 API 代理路徑。
 
-> 測試基線 **6 套全綠 · 227 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 41 / i18n 82；names-authority 20→40＝2026-08-16 掉落物名稱逐筆對台服解包（權威源擴為 tc_Item ∪ tclocal_Item 兩份）＋藏寶迷宮掉落＋`hidden` 未收錄數＋畫面標註不得消失；i18n 62→79＝共用哨兵演進＋新增 `js/gather-map.js` 進掃描清單，非本站回歸。以下為 2026-08-13 原文：**只准升不准降**。2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包（見下方說明）；`i18n`＝薄 wrapper，實際檢查在 portal 共用哨兵。⚠️ i18n 的 62 是**共用哨兵回報的檢查項數**，不是本 repo 的 assert 數——它會隨共用哨兵演進而變，屆時照實更新即可，那不是本站的回歸。（以下為 2026-08-03 原文） core 14 / room-pure 17 / drift 13 / worker 60；`npm test` exit 0；**只准升不准降**；2026-08-03 實測。worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 setWebSocketAutoResponse，且其比對的幀須與 js/room.js 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**）。
-> 基線由下列標記機械把關（pre-commit gate 6 / monorepo 的 tools/check-test-baseline.js）——**數字是各測試從自身原始碼數出來的呼叫點**，不是寫死的字面量，也不是執行次數（後者會被資料驅動迴圈放大，地圖改版就假紅燈）：
+> 測試基線 **6 套全綠 · 227 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 41 / i18n 82）；`npm test` exit 0；**只准升不准降**。沿革見 rationale。
+> 下列標記機械把關（pre-commit gate 6 / `<monorepo>/tools/check-test-baseline.js`）；**數字＝各測試從自身原始碼數出的呼叫點**，非執行次數：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
@@ -78,22 +78,21 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="82" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
 
 ```bash
-npm test   # 串六套：core（座標/路線 golden）+ room-pure（退避/淨化）+ drift（DIG常數/maps image/死CSS（掃整個 js/）/部署分類）+ worker（op-based 並發不互蓋）+ names-authority（顯示名＝台服解包）+ i18n（薄 wrapper → portal 共用哨兵）
-# 或個別跑：
-node tests/core.test.mjs           # 座標換算 + 路線優化 golden（含 dormant 2-opt 固定 golden）
-node tests/room-pure.test.mjs      # room client 純輔助：backoffDelay 退避上限 + sanitizeJoinCode 房號淨化 + sanitizeDisplayName 顯示名淨化
-node tests/drift.test.mjs          # DIG_W/DIG_H↔CSS 同步 + maps.json image 安全 + 無死 CSS（token 邊界比對）+ 頂層項目已分類（allow/deny 覆蓋、兩清單無交集）
-node worker/tests/worker.test.mjs  # 房間 applyOp/validate/originAllowed/roomFull/公開路由閘（含「並發加點不互蓋」證明）
-node tests/names-authority.test.mjs # 站上每個繁中名 ＝ 台服解包原文（零機器轉換）；權威源＝datamining_tc/tc_Item.csv **原始解包**，不用 item_lookup.name_tc（那欄混了 OpenCC fallback）；拿不到權威源一律失敗不 skip。⚠️ 2026-08-13 更正：`item_lookup` **現在有 `name_tc_source` 欄**（dump/dt/tnze/opencc），故產生器改為只收 `'dump'`——這一欄之前不存在，「有繁中名」與「台服真的有這個名字」在資料上完全無法區分，我就是這樣把 G18 誤判成「可以補了」（它的 name_tc 是国服名機轉，台服解包裡是空字串）。哨兵仍讀原始 CSV：那是**獨立於 sqlite 的第二個證人**，兩邊都錯才會漏
-node tests/i18n.test.mjs           # i18n 三組檢查（字典雙向漂移／覆蓋率／shim 降級）——**薄 wrapper，實作在 portal `tools/i18n-check.mjs`**；本站只留 `i18n.config.json`。拿不到共用哨兵一律失敗不 skip
+npm test   # 串六套；或個別跑：
+node tests/core.test.mjs            # 座標換算 + 路線 golden（含 dormant 2-opt）
+node tests/room-pure.test.mjs       # backoffDelay / sanitizeJoinCode / sanitizeDisplayName
+node tests/drift.test.mjs           # DIG↔CSS / maps image / 無死 CSS / 頂層已分類
+node worker/tests/worker.test.mjs   # applyOp/validate/originAllowed/roomFull/路由閘
+node tests/names-authority.test.mjs # 顯示名＝台服解包原文（tc_Item ∪ tclocal_Item）
+node tests/i18n.test.mjs            # 字典漂移／覆蓋率／shim 降級（實作在 portal）
 
-py -3.11 tools/build-data.py       # 改資料源後重建 data/ 下的 grades / maps / treasures / loot.json（2026-08-13 起**不再需要 opencc**；有缺涵蓋率 exit 1）
-py -3.11 tools/build-i18n-names.py # 上一支跑完必接這支：多語遊戲名詞（地圖／地名／掉落物）重生，任一筆 join 不到即整支失敗
-cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 STOP 交 shawn 正式 deploy）
+py -3.11 tools/build-data.py        # 改資料源後重建 data/ 各 json（缺涵蓋率 exit 1）
+py -3.11 tools/build-i18n-names.py  # 上一支跑完必接這支，任一筆 join 不到即失敗
+cd worker && pnpm cf:deploy:dry     # worker 部署前驗（0 error 才 STOP 交 shawn deploy）
 ```
 
-- 無 lint / typecheck（純 JS，無 TS 設定）。無 cachebust 腳本——本地 `.js/.css` 引用未帶 `?v=`（CF Pages `must-revalidate` 傳播；改 js/css 無額外步驟）。
-- UI smoke（改前端後）：`py -m http.server 8799`（先 `svc start portal` 載 CDN）→ 三步精靈流程 + 多人房間建/加入/加點/清空確認框。
+- 無 lint / typecheck（純 JS）、無 cachebust 腳本（`.js/.css` 不帶 `?v=`，靠 CF Pages `must-revalidate`）。
+- UI smoke（改前端後）：`py -m http.server 8799`（先 `svc start portal`）→ 三步精靈 + 房間建／加入／加點／清空。
 
 ---
 
@@ -101,52 +100,23 @@ cd worker && pnpm cf:deploy:dry    # worker 改動後部署前驗（0 error 才 
 
 | 檔案 | 職責 |
 |------|------|
-| `index.html` | shell（portal CDN document.write 注入 header/tokens）+ 三步精靈 DOM |
-| `styles.css` | 工具樣式（用 portal codex token/元件；色值走 `var(--token, fallback)`）|
-| `js/treasure-core.js` | 純函式（UMD）：座標換算 `(coord-1)*SizeFactor/40.96` + 路線優化（map 分組 greedy 最近鄰 + optional 2-opt）+ 遊戲內座標寫法 `formatGameCoord`|
-| `js/app.js` | 三步狀態機 + 裁切卡/全圖渲染 + 房間 UI（含「我的名稱」）+ 對各模組注入依賴（408 行；step 2 的兩個補充區塊已於 2026-08-16 拆成 loot-panel／gather-map）|
-| `js/app-modal.js` | 對話框元件（codex-modal）：`confirm` 破壞性操作確認 + `mapView` 挖掘點放大檢視（全圖 + 同區編號標記） |
-| `js/route-map.js` | 區域路線大圖渲染器（純渲染、不碰房間狀態）：SVG 順序線 + 編號標記（done/mine 態）+ 主水晶圖示 `aethIcon` |
-| `js/gather-map.js` | 「去哪採到這張圖」區塊：地區 chips ＋ 點開看該圖採集點位（走 app-modal 的 `mapView`，不另寫 modal）|
-| `js/route-panel.js` | 共享路線面板：清單列／區域大圖／建議順序／清空・清除已完成／複製巨集（依賴由 app.js 注入）|
-| `js/room.js` | 多人房間 client（WebSocket、op-based、自動重連 backoff、6h 自動重連）— 基於 mit-planner `app-room.js` 改 |
-| `js/room-pure.js` | room client 純輔助（UMD、無環境依賴、可單元測試）：重連退避 `backoffDelay` + 房號淨化 `sanitizeJoinCode` + 顯示名淨化 `sanitizeDisplayName` |
-| `worker/src/index.js` | 房間 API：**Durable Object**（`Room` class，op-based `applyOp` 純函式、SQLite storage、6h alarm 過期）— 獨立 wrangler，**Pages 不 build 它** |
-| `data/grades.json`、`data/maps.json`、`data/treasures.json` | 生成資料（`tools/build-data.py` 從 Teamcraft treasures+aetherytes ＋本地 item_dict 產；`maps.json` 含各圖傳送水晶座標；`grades.json` 含 `gatherLevel`＝解包 GatheringItem 的採集等級門檻）|
-| `js/loot-panel.js` | 「這張圖可能開出」區塊：藏寶迷宮寶箱（含機率／數量）＋挖出的箱子，每項連 marketboard 查價 |
-| `data/loot.json` | 生成資料（同上腳本）：`dungeons`＝藏寶迷宮寶箱（本地解包，含機率／數量／未收錄數）＋ `loot`＝挖出的箱子（Teamcraft，已知不完整）。**延後載入**（選了等級才抓）|
-| `data/gather.json` | 生成資料（同上腳本，來源＝monorepo item_dict 的 lspl 目錄下 nodes.json）：各採集等級的點位 ＋ 那些地圖的底圖／`sizeFactor`。同樣**延後載入**（21 KB）|
+| `index.html`／`styles.css` | shell（portal CDN 注入 header/tokens）+ 三步精靈 DOM／工具樣式 |
+| `js/treasure-core.js` | 純函式（UMD）：座標換算 `(coord-1)*SizeFactor/40.96`、路線優化（map 分組 greedy NN + optional 2-opt）|
+| `js/app.js` | 三步狀態機 + 裁切卡／全圖渲染 + 房間 UI + 對各模組注入依賴（408 行）|
+| `js/app-modal.js`／`route-map.js` | codex-modal（`confirm`／`mapView`）／區域路線大圖渲染器（SVG 順序線 + 編號標記 + `aethIcon`）|
+| `js/gather-map.js`／`loot-panel.js` | step 2 補充區塊：「去哪採到這張圖」（走 `mapView`）／「這張圖可能開出」（連 marketboard 查價）|
+| `js/route-panel.js` | 共享路線面板：清單列／大圖／建議順序／清空・清除已完成／複製巨集（依賴由 app.js 注入）|
+| `js/room.js`／`room-pure.js` | 房間 client（WebSocket、op-based、重連 backoff、6h 自動重連）／可單測純輔助（UMD）|
+| `worker/src/index.js` | 房間 API：**Durable Object**（`Room`、`applyOp` 純函式、SQLite storage、6h alarm）— 獨立 wrangler，**Pages 不 build 它** |
+| `data/*.json` | 由 `tools/build-data.py` 生成；`maps` 含傳送水晶座標、`grades` 含 `gatherLevel`；`loot`／`gather` **延後載入** |
 | `tests/`、`worker/tests/` | golden / drift / op-based 並發正確性 |
 
 ---
 
-## 開發注意（commit / push / deploy）
+## 開發循環與 git 邊界
 
-- **commit**：通則見 `../CLAUDE.md`「commit / push 通則」；動手前先列「要 commit `<檔案>`、訊息 `<message>`」知會，無反對才執行（不把 stage+commit 塞同一連鎖命令）。**繁中 Conventional Commits，不加 Co-Authored-By**。
-- **push = STOP**：本 repo 獨立 `.git`；由 Owner 跑 `bash ~/.claude/skills/process/tools/safe-push.sh --repo C:/FFXIVProject/external/ffxiv-tw-treasure --reason "<原因>"`（canonicalTest 綠才推＋JSONL 留痕，2026-07-21 裁示）。**裸 `git push` 被 hook 硬擋、不得繞**，也不要改列 `!git push` 請 Owner 代跑（不經 hook、少一筆 push-log）。憑證排錯：401 ＝ Windows Credential Manager 只在 cmd／git-bash 抓得到，改在 git-bash 重跑。push `main` → Cloudflare Pages 自動 build **前端**。
-- **worker deploy = STOP**：`worker/` 改動才需 `pnpm -C worker cf:deploy`（前端 push 不觸發 worker 部署）；先 `pnpm cf:deploy:dry` 驗 0 error。deploy 防呆見 monorepo 的 docs/runbooks/deploy-runbook.md。
-  - 部署狀態查證（read-only，需 wrangler 已登入）：`cd worker && npx wrangler deployments list`（列 UTC 時間戳，對比 worker/ 最新 commit 判是否已上線）。
-
----
-
-## 開發循環（DEVLOOP）
-
-正典：`~/.claude/process/DEVLOOP.md`（**不在此內嵌摘要**——DEVLOOP v1.21 §4.4：抄一份會過期的摘要只是製造第二真相源）。
-
-本 repo 差異：
-- 工件＝`CHANGELOG.md`、`docs/BACKLOG.md`、`docs/specs/`（首份＝`2026-07-30-aetheryte-on-map-design.md`）；`docs/plans/` 尚未建，需要時照契約建。小修走旁路。
-- 健檢報告在 `docs/health-reviews/`（`_INDEX.md` 索引）。深度 project-health-review 僅 Owner 手動 opt-in；輕量 delta 維護按需。
-- 動 `applyOp` 協定時的部署順序：**worker 先 deploy、前端後 push**（前端 push 自動觸發 Pages build，worker deploy 是人工 STOP → 兩者之間必然有時間差；新 op 送到舊 worker 會被靜默丟棄）。
-
-### 🔒 部署面鐵則（2026-08-01，勿回退）
-
-本 repo 的 CF Pages 部署**不是「發佈 repo 根目錄」**，而是由 `deploy-prepare.sh` 依 `deploy-allow.txt` 產出 `_site/`。CF dashboard 必須設 Build command = `sh deploy-prepare.sh`、Build output directory = `_site`。
-
-> 本段為 12 個 external repo 的**共用權威版本**（2026-08-15 統一）：三條原本只寫在單一 repo 的教訓（cache-bust 假紅燈／分類閘的靜默放行／產物路徑並行安全）已回填到所有副本。改本段請同步全部副本，不要只改一份。
-
-- **為什麼**：CF Pages 無 build 步驟時把 repo 根整棵目錄當靜態資產上傳 → `AGENTS.md`／`docs/`／`tools/`／`tests/`／`worker/` 後端源碼全部變成該網域下可直接 GET 的公開檔（2026-08-01 實測 12/13 站中招）。**private repo 只保護「誰能 clone」，不保護「已部署的檔案誰能下載」**；`.gitignore`（檔是 tracked）／`_headers`（只加標頭）／`robots.txt`（只擋收錄不擋直取）都擋不到。
-- **允許清單而非排除清單**：頂層出現任何未列入 `deploy-allow.txt`／`deploy-deny.txt` 的項目 → **build 直接失敗**。新增內部資產的預設值是「不發佈」，不靠任何人記得。排除清單做不到（實測當天漏了 `worker/` 106 支 .ts 與 `_tools/`／`_cache/` 141 檔）。注意（健檢 R3 D6）：分類閘另有兩條靜默放行（CF 容器 npm 產物固定 skip 清單、`git check-ignore`）——它是「逼人歸類」的提醒層；**真正的部署邊界是第 2 段複製迴圈的 allow-list 比對**，改腳本時該比對不可動、skip 清單只放建置環境產物不得用來繞分類。
-- **新增站台資產**（新頁面／新資料夾）→ 加進 `deploy-allow.txt`；**新增內部資產** → 加進 `deploy-deny.txt`。改完跑一次 `sh deploy-prepare.sh` 確認印出「✓ 部署輸出就緒」。
-- **腳本改動禁忌**：① 只能用 POSIX 語法（CF 容器的 `sh` 是 dash，`read -r -d ''` 之類 bashism 會靜默失敗、輸出 0 檔而 build 仍「成功」⇒ **整站 404**，2026-08-01 實際發生）② 根層檔名不可無條件 `mkdir "$OUT/${f%/*}"`（會建出「叫 index.html 的目錄」⇒ `/` 404）③ 不得移除出貨前驗收閘（輸出 <3 檔／缺 index.html／內部檔混入 → 非零 exit，CF 保留前一版）④ **產物路徑不得假設獨佔**：只要主工作樹可能被並行 session 或 cron 同時使用，固定的 `_site` 一定互踩。ranking B-117（2026-08-15）實證：只做「逐次專屬」而不加鎖**仍然兩份都 exit 1**（撞在 `rm -rf _site`），現行解＝建到 `_site.tmp.$$`、清單走 `mktemp`（repo 外）、換名段用 `mkdir "$_site.lock"` 序列化，哨兵＝`test_deploy_prepare_is_concurrency_safe`。兩次實際故障的訊息（「頂層出現未分類項目」「輸出缺 index.html」）**都指向錯的方向**，看起來像漏加允許清單 —— 本 repo 日後若接排程／並行寫入者，照 ranking 的做法改，別重新 debug 一次。
-- **部署後驗**（**務必帶 cache-bust**）：`curl -sI "https://<repo>.pages.dev/AGENTS.md?cb=$(date +%s)"` → 回 `text/html` 正常（檔案不存在、走 SPA fallback）；回 `text/markdown` = 紅燈。
-  - ⚠️ **不帶 cache-bust 會得到假紅燈**：舊部署（發佈 repo 根的那版）留在 CF 邊緣的物件帶 `s-maxage=604800`，命中時回 `text/markdown` 但 header 有 `CF-Cache-Status: HIT` ＋ 大 `Age`。**那是快取殘留不是外洩**，最長 7 天自癒（pages.dev 非自有 zone，dashboard 沒有 Purge Everything，收斂路徑就是等 TTL）。2026-08-01 R3 健檢實測：帶 cache-bust 的 `/AGENTS.md`、`/worker/src/index.js`、`/deploy-allow.txt` 全回 SPA fallback＝現行部署乾淨。
+- **commit / push 通則見 **../CLAUDE.md****（裸 push 硬擋、401 排錯）。**commit** 動手前先列「要 commit `<檔案>`、訊息 `<message>`」知會，無反對才執行（不把 stage+commit 塞同一連鎖命令）；**繁中 Conventional Commits，不加 Co-Authored-By**。
+- **push = STOP**：由 Owner 跑 `safe-push.sh --repo C:/FFXIVProject/external/ffxiv-tw-treasure --reason "<原因>"`；push `main` → CF Pages 自動 build **前端**。
+- **worker deploy = STOP**：`worker/` 改動才需 `pnpm -C worker cf:deploy`（前端 push 不觸發）；先 `pnpm cf:deploy:dry` 驗 0 error，防呆見 `<monorepo>/docs/runbooks/deploy-runbook.md`。查狀態：`cd worker && npx wrangler deployments list`。
+- DEVLOOP 正典＝`~/.claude/process/DEVLOOP.md`（**不內嵌摘要**，v1.21 §4.4）。工件＝`CHANGELOG.md`、`docs/BACKLOG.md`、`docs/specs/`；`docs/plans/` 尚未建，需要時照契約建。
+- 鐵則由來＝`docs/rules-rationale.md`；路徑條件載入層＝`.claude/rules/deploy-surface.md`。健檢報告在 `docs/health-reviews/`，深度 project-health-review 僅 Owner opt-in。
