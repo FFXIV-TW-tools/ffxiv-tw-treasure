@@ -16,3 +16,4 @@ worker
 node_modules
 package-lock.json
 i18n.config.json
+devloop.json
