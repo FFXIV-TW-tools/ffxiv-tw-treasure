@@ -45,7 +45,7 @@
 
 ## VERIFY 測試基線沿革
 
-- 2026-08-03 原始四套：core 14 / room-pure 17 / drift 13 / worker 60，`npm test` exit 0，**只准升不准降**。
+- 2026-08-03 原始四套：core 14 / room-pure 17 / drift 13 / worker 60，`npm test` exit 0。此為歷史實跑紀錄；基線增減依有效契約據實記錄，不以數量方向判品質。
 - worker 52→56＝B-047 xivtc.com 遷移期的 Origin 雙列契約：新網域 `treasure.xivtc.com` 須放行、未列舉的 xivtc 子網域／apex／後綴偽裝須被拒。
 - worker 56→60＝2026-08-04 心跳 auto-response 跨檔漂移哨兵：DO 必須註冊 `setWebSocketAutoResponse`，且其比對的幀須與 `js/room.js` 送出的逐字節一致——沒註冊或字串不符都會讓每次心跳叫醒 DO 並計費，而**兩種失敗都零功能訊號**。
 - 2026-08-13 新增兩套：`names-authority`＝顯示名逐筆對台服解包；`i18n`＝薄 wrapper，實作在 portal 共用哨兵。
