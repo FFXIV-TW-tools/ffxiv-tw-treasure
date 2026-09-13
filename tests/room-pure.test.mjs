@@ -13,13 +13,10 @@ import RP from '../js/room-pure.js';
 const A = 'assert';
 const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
-// ── backoffDelay：1,2,4,8,16→clamp 15s（retries clamp 4）──
-assert.equal(RP.backoffDelay(0), 1000, 'retries0 → 1s');
-assert.equal(RP.backoffDelay(1), 2000, 'retries1 → 2s');
-assert.equal(RP.backoffDelay(2), 4000, 'retries2 → 4s');
-assert.equal(RP.backoffDelay(3), 8000, 'retries3 → 8s');
-assert.equal(RP.backoffDelay(4), 15000, 'retries4 → 16s clamp 15s');
-assert.equal(RP.backoffDelay(10), 15000, 'retries 大 → 恆上限 15s');
+// ── backoffDelay：指數退避的遞增與上限（所有邊界共用一條資料驅動斷言）──
+for (const [retries, expected] of [[0, 1000], [1, 2000], [2, 4000], [3, 8000], [4, 15000], [10, 15000]]) {
+  assert.equal(RP.backoffDelay(retries), expected, `retries${retries} → ${expected}ms`);
+}
 
 // ── sanitizeJoinCode：大寫 + 去非 [0-9A-Z]（貼含符號/中文/空白也救得回）──
 assert.equal(RP.sanitizeJoinCode('abc123'), 'ABC123', '小寫轉大寫');

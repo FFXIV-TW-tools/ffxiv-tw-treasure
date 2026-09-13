@@ -2,6 +2,13 @@
 
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
+## 2026-09-12 — 測試稽核：合併參數列舉、移除自我掃描
+
+- `tests/room-pure.test.mjs` 將 backoffDelay 的 0／1／2／3／4／10 同一路徑合併為資料驅動斷言；六個邊界仍逐一執行。
+- `tests/drift.test.mjs` 移除只掃本站 `.tre-*` CSS 原始碼的死碼案例；DIG↔CSS、圖片／CSP、資料健全性與部署分類哨兵保留。
+- i18n 82 項與 names-authority 41 項駁回合併：前者是 portal 跨 repo 哨兵，後者以台服解包 CSV 為獨立權威，並非同路徑 padding。
+- 測試基線 **227 → 221 assert 呼叫點**（core 14 / room-pure 12 / drift 12 / worker 60 / names-authority 41 / i18n 82）。
+
 
 ## 2026-09-05 — 舊網址交接機制退役（Bulk Redirects 取代 middleware 301）
 

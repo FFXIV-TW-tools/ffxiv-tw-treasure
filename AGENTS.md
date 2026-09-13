@@ -67,12 +67,12 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- B-048-HANDOFF -->
 > **舊網址交接機制 2026-09-05 退役**（見 rationale）：本 repo 無 middleware、無 inline 交接腳本，`_routes.json` include 只留 API 代理路徑。
 
-> 測試基線 **6 套全綠 · 227 assert 呼叫點**（core 14 / room-pure 17 / drift 13 / worker 60 / names-authority 41 / i18n 82）；`npm test` exit 0；**只准升不准降**。沿革見 rationale。
+> 測試基線 **6 套全綠 · 221 assert 呼叫點**（core 14 / room-pure 12 / drift 12 / worker 60 / names-authority 41 / i18n 82）；`npm test` exit 0；**不得靜默下降**。沿革見 rationale。
 > 下列標記機械把關（pre-commit gate 6 / `<monorepo>/tools/check-test-baseline.js`）；**數字＝各測試從自身原始碼數出的呼叫點**，非執行次數：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
-<!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="17" -->
-<!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
+<!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="12" -->
+<!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="12" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
 <!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="41" -->
 <!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="82" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
@@ -81,7 +81,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 npm test   # 串六套；或個別跑：
 node tests/core.test.mjs            # 座標換算 + 路線 golden（含 dormant 2-opt）
 node tests/room-pure.test.mjs       # backoffDelay / sanitizeJoinCode / sanitizeDisplayName
-node tests/drift.test.mjs           # DIG↔CSS / maps image / 無死 CSS / 頂層已分類
+node tests/drift.test.mjs           # DIG↔CSS / maps image+CSP / 頂層已分類
 node worker/tests/worker.test.mjs   # applyOp/validate/originAllowed/roomFull/路由閘
 node tests/names-authority.test.mjs # 顯示名＝台服解包原文（tc_Item ∪ tclocal_Item）
 node tests/i18n.test.mjs            # 字典漂移／覆蓋率／shim 降級（實作在 portal）

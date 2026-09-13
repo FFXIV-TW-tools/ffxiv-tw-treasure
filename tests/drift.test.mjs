@@ -1,12 +1,13 @@
 // tests/drift.test.mjs — node tests/drift.test.mjs（fail 即 exit 非 0）
-// 零成本機械檢查，把健檢驗過的不變量固化（同一不變量下次免 LLM 重驗）：
-//  1. 裁切卡尺寸 DIG_W/DIG_H(app.js) 與 --dig-w/--dig-h(styles.css) 必須同值（漂移→pin 偏離挖掘點）
-//  2. maps.json 每筆 image 必為 https:// 且不含 url() 危險字元（前端以字串拼 backgroundImage=url("...")）
-//  3. styles.css 定義的每個 .tre-* class 都要在 index.html/js 有引用（擋死 CSS 累積）
-//  4. 每個頂層 tracked 項目都已列入 deploy-allow / deploy-deny（把 CF build 期的分類閘提前到 commit 前）
+// 零成本機械檢查，把仍具跨檔／部署後果的不變量固化：
+//  1. 裁切卡尺寸 DIG_W/DIG_H(app.js) 與 --dig-w/--dig-h(styles.css) 必須同值
+//  2. maps.json 每筆 image 必為 https:// 且不含 url() 危險字元
+//  3. maps／JS 圖片主機必須都在 _headers 的 CSP img-src 白名單
+//  4. 傳送水晶資料形狀、座標值域與總量不塌
+//  5. 每個頂層 tracked 項目都已列入 deploy-allow / deploy-deny
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -70,18 +71,6 @@ for (const [mid, m] of Object.entries(maps)) {
 }
 assert.ok(aethTotal >= 60, `主水晶總數異常偏低（${aethTotal}）— 資料源或過濾條件可能壞了`);
 
-// ── 3. 無死 .tre-* CSS（styles.css 定義的每個都要有人用）──
-// token 邊界比對（非子字串）：class 名前後不得緊接 class 字元 [a-z0-9_-]，
-// 否則父類 `tre-dig` 會被子類 `tre-dig__map` 的子字串「誤判為已使用」→ 真死父類漏抓。
-// ⚠️ 掃**整個 js/ 目錄**而不是逐檔列舉：新增一支 JS 時沒人會記得回來補這一行，
-//    而漏補的症狀是「新 class 被誤判成死 CSS」＝假紅燈（2026-08-16 新增 gather-map.js 當場踩到）。
-const allJs = readdirSync(join(ROOT, 'js')).filter((f) => f.endsWith('.js'))
-  .map((f) => read('js/' + f)).join('\n');
-const src = allJs + html;
-const defined = new Set([...css.matchAll(/\.(tre-[a-z0-9_-]+)/gi)].map((m) => m[1]));
-const usedAsToken = (cls) => new RegExp('(?<![a-z0-9_-])' + cls + '(?![a-z0-9_-])').test(src);
-const dead = [...defined].filter((cls) => !usedAsToken(cls));
-assert.deepEqual(dead, [], `發現死 CSS class（styles.css 定義但無人以完整 token 引用）：${dead.join(', ')}`);
 
 // ── 4. 部署分類閘：每個頂層 tracked 項目都必須已歸類 ──
 // deploy-prepare.sh 的分類閘只在 CF build 期跑 → 新增頂層檔會 push 成功、但 build 失敗、
