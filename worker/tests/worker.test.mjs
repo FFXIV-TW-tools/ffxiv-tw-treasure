@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, maxConn, publicRoomMethodAllowed, isSeedRequest } from '../src/index.js';
+import worker, { applyOp, validatePoint, validateState, genCode, originAllowed, normalizePoint, roomFull, maxConn, publicRoomMethodAllowed, isSeedRequest, Room } from '../src/index.js';
 
 // assert 呼叫點計數（供 AGENTS.md 的 TEST-BASELINE 標記機械比對）。刻意數「原始碼裡的呼叫點」
 // 而非「執行次數」：後者會被資料驅動迴圈放大，地圖資料改版就讓基線變動＝假紅燈。
@@ -14,6 +14,10 @@ const A = 'assert';
 const asserts = (readFileSync(fileURLToPath(import.meta.url), 'utf8').match(new RegExp(A + '[.][a-zA-Z]+[(]', 'g')) || []).length;
 
 const P = (o = {}) => ({ key: 'u1:1.0', owner: 'u1', ownerName: '貓', map: 4, x: 20, y: 20, item: 6688, ...o });
+
+globalThis.WebSocketRequestResponsePair ??= class WebSocketRequestResponsePair {
+  constructor(request, response) { this.request = request; this.response = response; }
+};
 
 // genCode
 assert.match(genCode(), /^[0-9A-Z]{6}$/, 'genCode 6 碼 base32');
@@ -117,6 +121,148 @@ assert.equal(publicRoomMethodAllowed('DELETE'), false, 'DELETE 拒');
 assert.equal(isSeedRequest('/seed'), true, '內部 seed 通道認得');
 assert.equal(isSeedRequest('/room/ABCDEF'), false, '外部路徑不得當 seed（第二層守衛）');
 assert.equal(isSeedRequest('/seed/x'), false, '前綴偽裝拒');
+
+
+// ── H08：建房碼碰撞／seed 回應契約（2026-09-16）────────────────────────────
+const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+function forceRandomBytes(...bytes) {
+  let i = 0;
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      getRandomValues(array) {
+        array.set(bytes[Math.min(i++, bytes.length - 1)]);
+        return array;
+      },
+    },
+  });
+  return () => Object.defineProperty(globalThis, 'crypto', originalCryptoDescriptor);
+}
+
+// 有效房碼碰撞：DO 回 409，不得改舊 points／expiresAt；router 換碼成功才回新碼。
+{
+  const oldState = { points: [P({ key: 'old:1', owner: 'old' })], expiresAt: Date.now() + 60_000 };
+  const oldSnapshot = structuredClone(oldState);
+  let stored = oldState;
+  let puts = 0;
+  let alarms = 0;
+  const oldRoom = new Room({
+    storage: {
+      get: async (key) => key === 'state' ? stored : undefined,
+      put: async (_key, value) => { puts++; stored = value; },
+      setAlarm: async () => { alarms++; },
+    },
+    getWebSockets: () => [],
+    setWebSocketAutoResponse: () => {},
+  }, {});
+  const calls = [];
+  const env = {
+    ROOM: {
+      idFromName: (code) => code,
+      get: (code) => ({
+        fetch: async (request) => {
+          calls.push(code);
+          if (code === '000000') return oldRoom.fetch(request);
+          return new Response(JSON.stringify({ ok: true }), { status: 201 });
+        },
+      }),
+    },
+  };
+  const restore = forceRandomBytes(new Uint8Array(6).fill(0), new Uint8Array(6).fill(1));
+  try {
+    const req = new Request('https://x/room', {
+      method: 'POST',
+      headers: { Origin: 'https://ffxiv-tw-treasure.pages.dev', 'CF-Connecting-IP': '203.0.113.80' },
+      body: JSON.stringify({ state: { points: [P({ key: 'new:1', owner: 'new' })] } }),
+    });
+    const res = await worker.fetch(req, env);
+    const body = await res.json();
+    assert.equal(res.status, 200, '有效碰撞後換碼成功才回 200');
+    assert.equal(body.code, '111111', '有效碰撞後回傳新房碼');
+    assert.deepEqual(calls, ['000000', '111111'], '先碰撞再換碼，兩次 seed 順序正確');
+    assert.deepEqual(stored.points, oldSnapshot.points, '409 碰撞不得改舊 points');
+    assert.equal(stored.expiresAt, oldSnapshot.expiresAt, '409 碰撞不得重設舊 expiresAt');
+    assert.equal(puts, 0, '有效碰撞不得寫入舊房');
+    assert.equal(alarms, 0, '有效碰撞不得重設舊房 alarm');
+  } finally {
+    restore();
+  }
+}
+
+// 過期房可重用：沿用現有 expiresAt 判定，換成新 state 並重設 TTL。
+{
+  let stored = { points: [P({ key: 'expired:1' })], expiresAt: Date.now() - 1 };
+  let puts = 0;
+  let alarms = 0;
+  const room = new Room({
+    storage: {
+      get: async (key) => key === 'state' ? stored : undefined,
+      put: async (_key, value) => { puts++; stored = value; },
+      setAlarm: async () => { alarms++; },
+    },
+    getWebSockets: () => [],
+    setWebSocketAutoResponse: () => {},
+  }, {});
+  const res = await room.fetch(new Request('https://do/seed', {
+    method: 'POST',
+    body: JSON.stringify({ state: { points: [P({ key: 'reused:1' })] } }),
+  }));
+  assert.equal(res.status, 200, '過期房可重用');
+  assert.equal(stored.points[0].key, 'reused:1', '過期房寫入新 state');
+  assert.equal(puts, 1, '過期房重用寫入一次');
+  assert.equal(alarms, 1, '過期房重用重設一次 alarm');
+}
+
+// 三次都碰撞：不可把最後一個碰撞碼交給 client。
+{
+  let calls = 0;
+  const env = {
+    ROOM: {
+      idFromName: () => 'id',
+      get: () => ({
+        fetch: async () => {
+          calls++;
+          return new Response(JSON.stringify({ error: 'room_exists' }), { status: 409 });
+        },
+      }),
+    },
+  };
+  const restore = forceRandomBytes(new Uint8Array(6).fill(2));
+  try {
+    const res = await worker.fetch(new Request('https://x/room', {
+      method: 'POST',
+      headers: { Origin: 'https://ffxiv-tw-treasure.pages.dev', 'CF-Connecting-IP': '203.0.113.81' },
+      body: '{}',
+    }), env);
+    const body = await res.json();
+    assert.equal(res.status, 503, '三次碰撞回 503');
+    assert.equal(body.error, 'room_unavailable', '三次碰撞回 room_unavailable');
+    assert.equal(calls, 3, '最多重試三次');
+  } finally {
+    restore();
+  }
+}
+
+// seed 回應為任意非 2xx 時，router 不得假報建房成功。
+{
+  const env = {
+    ROOM: {
+      idFromName: () => 'id',
+      get: () => ({ fetch: async () => new Response(JSON.stringify({ error: 'seed_failed' }), { status: 500 }) }),
+    },
+  };
+  const restore = forceRandomBytes(new Uint8Array(6).fill(3));
+  try {
+    const res = await worker.fetch(new Request('https://x/room', {
+      method: 'POST',
+      headers: { Origin: 'https://ffxiv-tw-treasure.pages.dev', 'CF-Connecting-IP': '203.0.113.82' },
+      body: '{}',
+    }), env);
+    assert.notEqual(res.status, 200, 'seed 非 2xx 不得回成功 200');
+  } finally {
+    restore();
+  }
+}
 
 // ── 心跳 auto-response 跨檔漂移哨兵（2026-08-04 額度事故）──────────────────
 //

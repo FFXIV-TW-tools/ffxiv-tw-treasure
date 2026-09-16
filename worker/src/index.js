@@ -11,6 +11,7 @@ const MAX_SEED_BYTES = 64 * 1024;     // 建房 seed 上限
 const MAX_POINTS = 64;                 // 一房挖掘點上限（8 人 × 數張圖，64 足夠）
 const MAX_CONN = 32;                    // 單房 WS 連線軟上限（8 人組隊 + 多開/重連冗餘綽綽；擋單房連線洪水）
 const EXPIRE_MS = 6 * 60 * 60 * 1000;  // 房間建立 6 小時後過期（DO alarm 清資料 + 拒新連線）
+const ROOM_CREATE_ATTEMPTS = 3;        // 房碼碰撞時最多換碼重試三次，避免低機率碰撞變成覆寫
 const OP_RATE_MAX = 25;                // 同 socket op 速率：每窗 25 次
 const OP_RATE_WINDOW_MS = 3000;        // 窗口 3s（容許「連點加 8 個」的合法爆發，擋惡意洪水）
 const ROOM_RATE_MAX = 10;              // 同 IP 建房上限：每窗 10 次
@@ -164,10 +165,15 @@ export default {
         let seed = {};
         try { seed = body ? JSON.parse(body) : {}; } catch (e) { return json({ error: "bad_json" }, 400, req); }
         if (seed && seed.state != null && !validateState(seed.state)) return json({ error: "bad_state" }, 400, req);
-        const code = genCode();
-        const stub = env.ROOM.get(env.ROOM.idFromName(code));
-        await stub.fetch(new Request("https://do/seed", { method: "POST", body: body || "{}", headers: { "Content-Type": "application/json" } }));
-        return json({ code }, 200, req);
+        for (let attempt = 0; attempt < ROOM_CREATE_ATTEMPTS; attempt++) {
+          const code = genCode();
+          const stub = env.ROOM.get(env.ROOM.idFromName(code));
+          const seedRes = await stub.fetch(new Request("https://do/seed", { method: "POST", body: body || "{}", headers: { "Content-Type": "application/json" } }));
+          if (seedRes.status === 409) continue; // DO 以 409 表示已有有效 state，換碼避免覆寫別人的房
+          if (!seedRes.ok) return json({ error: "seed_failed" }, 500, req);
+          return json({ code }, 200, req);
+        }
+        return json({ error: "room_unavailable" }, 503, req);
       }
 
       const code = (parts[1] || "").toUpperCase();
@@ -259,6 +265,11 @@ export class Room {
         return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
       }
       const body = await req.json().catch(() => ({}));
+      const existing = await this.ctx.storage.get("state");
+      if (existing && !(existing.expiresAt && Date.now() > existing.expiresAt)) {
+        // 409 是「有效房已存在」語意，供 Worker 遇碰撞換碼；未過期 state 不得覆寫或重設 TTL。
+        return new Response(JSON.stringify({ error: "room_exists" }), { status: 409, headers: { "Content-Type": "application/json" } });
+      }
       let seedPoints = [];
       if (body && body.state) {
         if (!validateState(body.state)) return new Response(JSON.stringify({ error: "bad_state" }), { status: 400, headers: { "Content-Type": "application/json" } });

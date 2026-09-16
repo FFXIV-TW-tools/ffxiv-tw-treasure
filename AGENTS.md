@@ -27,6 +27,7 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **破壞性操作過 `confirmModal(...)` 二次確認＋成功 toast**：清空／清除已完成／移除**隊友的**點；刪**自己的**點一鍵即可。
 - **worker 只導出 function**：導出裸值會讓整支 worker 起不來；要常數就導出 getter（`maxConn()`）。
 - **動 `applyOp` 協定的部署順序：worker 先 deploy、前端後 push。**
+- **建房不得覆寫既有有效房**：`seed` 遇未過期 state 回 409（過期可重用）；router 換碼重試 3 次，seed 非 2xx 不回 200。
 
 ### 前端與 UI
 
@@ -67,13 +68,13 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- B-048-HANDOFF -->
 > **舊網址交接機制 2026-09-05 退役**（見 rationale）：本 repo 無 middleware、無 inline 交接腳本，`_routes.json` include 只留 API 代理路徑。
 
-> 測試基線 **6 套全綠 · 221 assert 呼叫點**（core 14 / room-pure 12 / drift 12 / worker 60 / names-authority 41 / i18n 82）；`npm test` exit 0；**不得靜默下降**。沿革見 rationale。
-> 下列標記機械把關（pre-commit gate 6 / `<monorepo>/tools/check-test-baseline.js`）；**數字＝各測試從自身原始碼數出的呼叫點**，非執行次數：
+> 測試基線 **6 套全綠 · 236 assert**；`npm test` exit 0；**不得靜默下降**。
+> 下列標記由 pre-commit gate 6 機械把關（`<monorepo>/tools/check-test-baseline.js`）；數字定義見 rationale：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="12" -->
 <!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="12" -->
-<!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="60" -->
+<!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="75" -->
 <!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="41" -->
 <!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="82" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
 
