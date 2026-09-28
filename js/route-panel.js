@@ -17,6 +17,9 @@
     var el = deps.el, TC = deps.TC, RMAP = deps.RMAP, MODAL = deps.MODAL, ROOM = deps.ROOM;
     var zoneName = deps.zoneName, toast = deps.toast, ensureConnected = deps.ensureConnected;
     var confirmModal = deps.confirmModal, copyCoords = deps.copyCoords;
+    var goGrade = function () {};
+    var next = null;
+    var visual = window.TreasureVisual;
     function maps() { return deps.getMaps(); }
     function points() { return deps.getShared().points || []; }
 
@@ -72,16 +75,23 @@
       var mine = !!(ROOM && r.owner === ROOM.owner());
       var item = document.createElement('div'); item.className = 'tre-route-item' + (r.done ? ' is-done' : '') + (mine ? ' is-mine' : '');
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
+      var checkLabel = document.createElement('label'); checkLabel.className = 'codex-checkbox tre-route-item__check';
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', t('標記完成'));
       chk.addEventListener('change', function () {
-        if (!ensureConnected()) { chk.checked = !chk.checked; return; }   // 未連上→還原勾選（op 未送出）
+        if (!ensureConnected()) { chk.checked = !chk.checked; return; }
         ROOM.setDone(r.key, chk.checked);
       });
+      checkLabel.appendChild(chk);
       var co = document.createElement('span'); co.className = 'tre-route-item__co codex-body'; co.textContent = 'X:' + r.x + ' Y:' + r.y;
       var owner = document.createElement('span'); owner.className = 'tre-route-item__owner'; owner.textContent = r.ownerName || '';
-      var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'tre-route-item__btn'; cp.textContent = '📋'; cp.setAttribute('aria-label', t('複製此點'));
+      function iconAction(name, label) {
+        var slot = document.createElement('span'); slot.className = 'codex-hit-target';
+        var button = document.createElement('button'); button.type = 'button'; button.className = 'codex-icon-btn'; button.setAttribute('aria-label', label);
+        button.appendChild(visual.icon(name)); slot.appendChild(button); item.appendChild(slot); return button;
+      }
+      var cp = iconAction('copy', t('複製此點'));
       cp.addEventListener('click', function () { copyCoords(maps()[r.map] || { zone: zoneName(r.map) }, r); });
-      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'tre-route-item__btn'; rm.textContent = '✕'; rm.setAttribute('aria-label', t('移除'));
+      var rm = iconAction('x', t('移除'));
       rm.addEventListener('click', function () {
         if (!ensureConnected()) return;
         // 刪自己的點一鍵即可；刪隊友的點才確認（避免默默抹掉別人成果，又不擋正當協作清理）
@@ -92,7 +102,8 @@
           if (yes) ROOM.removePoint(r.key);
         });
       });
-      item.appendChild(num); item.appendChild(chk); item.appendChild(co); item.appendChild(owner); item.appendChild(cp); item.appendChild(rm);
+      item.appendChild(num); item.appendChild(checkLabel); item.appendChild(co); item.appendChild(owner);
+      item.appendChild(cp.parentNode); item.appendChild(rm.parentNode);
       return item;
     }
 
@@ -101,20 +112,32 @@
       var inRoom = !!(ROOM && ROOM.isInRoom());
       el['route-panel'].hidden = !inRoom;
       if (!inRoom) return;
-      var pts = points();
-      var doneN = pts.filter(function (q) { return q.done; }).length;   // U4：標題常駐「已完成 X / 共 Y 點」完成進度彙總
-      el['route-count'].textContent = pts.length ? t('（已完成 {done} / 共 {total} 點）', { done: doneN, total: pts.length }) : '';
-      el['route-empty'].hidden = pts.length > 0;
+      var pts = points(), synced = deps.getShared().synced;
+      var doneN = pts.filter(function (q) { return q.done; }).length;
+      var zones = new Set(pts.map(function (q) { return q.map; })).size;
+      el['route-total'].textContent = synced ? String(pts.length) : t('同步中');
+      el['route-done'].textContent = synced ? String(doneN) : t('同步中');
+      el['route-zones'].textContent = synced ? String(zones) : t('同步中');
+      el['route-empty'].hidden = !synced || pts.length > 0;
+      next = synced ? pts.find(function (p) { return !p.done; }) : null;
+      el['route-next'].hidden = !synced || pts.length === 0;
+      if (synced && pts.length) {
+        el['route-next-text'].textContent = next
+          ? t('下一站：{zone}・X:{x} Y:{y}', { zone: zoneName(next.map), x: next.x, y: next.y })
+          : t('全部挖掘點已完成');
+        el['route-next'].querySelector('[data-route="next-copy"]').hidden = !next;
+        el['route-next'].querySelector('[data-route="next-done"]').hidden = !next;
+      }
       el['route-list'].textContent = '';
-      if (!pts.length) { el['route-stat'].hidden = true; return; }
+      if (!synced || !pts.length) { el['route-stat'].hidden = true; return; }
       var curMap = null, listEl = null;
       pts.forEach(function (r, i) {
         if (r.map !== curMap) {
           curMap = r.map;
           var zoneEl = document.createElement('div'); zoneEl.className = 'tre-route-zone';
-          var head = document.createElement('div'); head.className = 'tre-route-zone__head';
-          var zn = document.createElement('span'); zn.textContent = zoneName(r.map);
-          var zc = document.createElement('span'); zc.className = 'codex-small'; zc.textContent = t('{n} 點', { n: pts.filter(function (x) { return x.map === r.map; }).length });
+          var head = document.createElement('div'); head.className = 'codex-group-head';
+          var zn = document.createElement('span'); zn.className = 'codex-group-head__title'; zn.textContent = zoneName(r.map);
+          var zc = document.createElement('span'); zc.className = 'codex-count'; zc.textContent = t('{n} 點', { n: pts.filter(function (x) { return x.map === r.map; }).length });
           head.appendChild(zn); head.appendChild(zc); zoneEl.appendChild(head); el['route-list'].appendChild(zoneEl);
           // 左清單／右大圖並排（大圖獨佔一整列太空；並排後同一區的點與位置一眼對照）
           var body = document.createElement('div'); body.className = 'tre-route-zone__body';
@@ -193,9 +216,12 @@
       else if (a === 'copy') copyMacro();
       else if (a === 'clear-done') clearDone();
       else if (a === 'clear') clearAll();
+      else if (a === 'go-grade') goGrade();
+      else if (a === 'next-copy' && next) copyCoords(maps()[next.map] || { zone: zoneName(next.map) }, next);
+      else if (a === 'next-done' && next && ensureConnected()) ROOM.setDone(next.key, true);
     });
 
-    return { render: render, applyOptimize: applyOptimize };
+    return { render: render, applyOptimize: applyOptimize, onGoGrade: function (fn) { goGrade = fn; } };
   }
 
   window.TreasureRoutePanel = { create: create };

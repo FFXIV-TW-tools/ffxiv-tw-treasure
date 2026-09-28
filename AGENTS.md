@@ -35,10 +35,11 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **前端零 HTML sink**：全程 `createElement`+`textContent`、事件委派、無 inline handler；勿引入 `innerHTML`。
 - **地圖標記一律遊戲原生圖示，不用 emoji**（權威＝marketboard 的 `NODE_TYPE_ICON`／map_view 模組，不自創）：採集點 xivapi `/i/060000/`（060438 採掘／060437 碎石／060433 採伐／060432 割草），視覺照抄該站 `.map-pin-img`（**30px＋青色光暈＋黑色投影**）；傳送點＝主水晶 `060453`（22px），資料＝`<monorepo>/data/item_dict/lspl/aetherytes.json`（勿接 Teamcraft）、**只收 type 0**。
 - **`#grade-grid` 必須預留首屏高度**：`min-height: 72svh`（用 `svh` 非 `vh`），footer 一開始就在 fold 外。哨兵＝`<monorepo>/tools/check-cls.mjs`（**逐寬度**掃）。
+- **回訪最近選圖列首繪佔位；地圖 pin 高亮用 `.codex-map-pin--active`；查價連結 `aria-label` 須含寶箱編號／數量／機率**（見 rationale）。
 - `drift.test.mjs` 守兩條雙寫：**`DIG_W/DIG_H`(app.js) ↔ `--dig-w/--dig-h`(styles.css) 必須同值**；**外部圖片主機必須同步 `_headers` 的 CSP `img-src`**（本機 `http.server` 不套 `_headers`，本地測不出 CSP 問題）。
-- **面向使用者的文案不寫內部術語**（Owner 2026-08-16）：「解包」「dump」「name_tc」只進註解／`_meta`／文件；但「這是推導、不保證」要改寫成玩家語言、不得刪掉（`names-authority` 守 `t('…')` 不得出現「解包」）。
-- **檔案 ≤ 500 行（新檔）**：目前最大 `js/app.js` 408 行；再逼近 500 就按職責分層（下一候選＝三步狀態機／裁切卡渲染）。
-- 改 UI／CSS 前先 Read **../ffxiv-tw-tools-portal/_DESIGN-SYSTEM.md**（設計權威，不憑記憶寫）；色值走 `var(--token, fallback)`，勿裸寫 hex/rgba。
+- **面向使用者的文案不寫內部術語**（Owner 2026-08-16）：「解包」「dump」「name_tc」只進註解／`_meta`／文件；但「這是推導、不保證」要改寫成玩家語言、不得刪掉。
+- **檔案 ≤ 500 行（新檔）**：行數以 `wc -l` 為準；`js/app.js` 再逼近 500 就按職責分層（下一候選＝三步狀態機／裁切卡渲染）。
+- 改 UI／CSS 前先 Read **../ffxiv-tw-tools-portal/_DESIGN-SYSTEM.md**；色值走 `var(--token, fallback)`，勿裸寫 hex/rgba。
 
 ### 資料與名稱權威
 
@@ -47,13 +48,13 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 - **多語（en/ja）名詞不進資料檔**：`tools/build-i18n-names.py` 生成到 `i18n/en.js`／`ja.js` 標記區塊，切外語才載入。
 - **「藏寶圖從哪個採集點掉」在解包裡不存在，別再查一次**（由來見 rationale）。站上「去哪採到這張圖」是**依等級門檻推導**：取 `level` **恰好等於** `grades.json` 的 `gatherLevel` 的採集點（來源＝`<monorepo>/data/item_dict/lspl/nodes.json`，只收 type 0–3；`map == 0` 丟棄 ⇒ 點數是**下限**）。**畫面必須寫明是推導**，不得寫成官方保證、不得自創地點清單。
 - **掉落物兩種來源不得混成一份清單**（`data/loot.json`）：`dungeons`＝藏寶迷宮寶箱，本地解包 **`DungeonChest`／`DungeonChestItem` ＋ `DungeonDrop` 兩張表必須併**，含機率與數量；`loot`＝挖出的箱子，Teamcraft `loot-sources.json`（**已知不完整**）。`DUNGEON_CATALOG`（`build-data.py`）是**人工對照**，防呆＝**patch 閘**（掉落物 patch 須落在該圖版本之後）。
-- `tests/names-authority.test.mjs` 守：名稱逐筆＝兩份原始解包 CSV 之一、`hidden` 欄必須在、畫面上必須有來源與未收錄提示；拿不到權威源一律失敗不 skip。
+- `tests/names-authority.test.mjs` 守：名稱逐筆＝兩份原始解包 CSV 之一、`hidden` 欄必須在；拿不到權威源一律失敗不 skip。已移除對前端文案與產生器原始碼的 regex 檢查。
 
 ### 建置與演算法
 
 - **座標公式＝FFXIV 官方 datamining**；路線演算法移植自 cycleapple/xiv-tc-treasure-finder（勿自創）。
 - **root `package.json` 不可設 `"type":"module"`**（`treasure-core.js` 是 UMD）；`worker/` 自帶 `"type":"module"` 不衝突。
-- **`improve2Opt`（2-opt）是閉環假設**、本工具是**開放路徑**；`use2Opt` 預設關、無產品呼叫者。啟用前先修尾端幻邊，測試用**固定 golden `deepEqual`**，**勿用**「≤ 非 2opt」單調斷言（會 flaky）。
+- **`improve2Opt`（2-opt）是閉環假設**、本工具是**開放路徑**；`use2Opt` 預設關、無產品呼叫者。啟用前先修尾端幻邊；已移除釘 dormant 分支目前順序的 golden 測試。
 
 ### 🔒 部署面（fail-closed，勿回退）
 
@@ -68,15 +69,15 @@ FFXIV 繁中服（陸行鳥 DC）藏寶圖工具：選等級→選地圖→比�
 <!-- B-048-HANDOFF -->
 > **舊網址交接機制 2026-09-05 退役**（見 rationale）：本 repo 無 middleware、無 inline 交接腳本，`_routes.json` include 只留 API 代理路徑。
 
-> 測試基線 **6 套全綠 · 236 assert**；`npm test` exit 0；**不得靜默下降**。
+> 測試基線 **6 套全綠 · 241 assert**；`npm test` exit 0；**不得靜默下降**。
 > 下列標記由 pre-commit gate 6 機械把關（`<monorepo>/tools/check-test-baseline.js`）；數字定義見 rationale：
 
 <!-- TEST-BASELINE label="core" cmd="node tests/core.test.mjs" match="(\d+) assertions passed" expect="14" -->
 <!-- TEST-BASELINE label="room-pure" cmd="node tests/room-pure.test.mjs" match="(\d+) assertions passed" expect="12" -->
-<!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="12" -->
+<!-- TEST-BASELINE label="drift" cmd="node tests/drift.test.mjs" match="(\d+) assertions passed" expect="13" -->
 <!-- TEST-BASELINE label="worker" cmd="node worker/tests/worker.test.mjs" match="(\d+) assertions passed" expect="75" -->
 <!-- TEST-BASELINE label="names-authority" cmd="node tests/names-authority.test.mjs" match="(\d+) 項通過" expect="41" -->
-<!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="82" --><!-- 2026-08-16 實測 79（前次 76）；62→76 是 EN／JA 上線那筆 commit 只長了測試、沒回寫宣告值 -->
+<!-- TEST-BASELINE label="i18n" cmd="node tests/i18n.test.mjs" match="(\d+) 項通過" expect="86" -->
 
 ```bash
 npm test   # 串六套；或個別跑：

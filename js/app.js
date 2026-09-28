@@ -11,14 +11,17 @@
 
   var DATA = { grades: [], maps: {}, byItem: {} };
   var state = { grade: null, mapId: null };
-  var shared = { points: [], online: 0 };   // 房間共享清單（由 ROOM.onChange 灌入）
+  var shared = { points: [], online: 0, synced: false }; // 同步前不得把空清單當成 0 點
 
   var el = {};
-  ['step-grade', 'step-map', 'step-treasure', 'grade-grid', 'map-grid', 'dig-grid', 'loot-box', 'gather-box',
-   'full-map', 'full-map-info', 'map-title', 'tre-title', 'tre-status', 'map-tabs',
-   'room-bar', 'route-panel', 'route-count', 'route-stat', 'route-empty', 'route-list'].forEach(function (id) {
+  ['step-grade', 'step-map', 'step-treasure', 'grade-grid', 'recent-picks', 'map-grid', 'dig-grid', 'loot-box', 'gather-box',
+   'full-map', 'full-map-info', 'map-title', 'tre-title', 'tre-status', 'map-tabs', 'tre-dig-hint',
+   'room-bar', 'route-panel', 'route-stat', 'route-empty', 'route-list',
+   'route-total', 'route-done', 'route-zones', 'route-next', 'route-next-text'].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
+  var visual = window.TreasureVisual;
+  document.querySelectorAll('[data-tre-icon]').forEach(function (host) { host.appendChild(visual.icon(host.dataset.treIcon)); });
 
   // i18n：shim 保證 window.FFXIVI18n 一定在（index.html 的 inline shim 早於本檔）。
   // 整句一條 key（不拆片段串接）——片段在英日文語序下組不回通順句子。
@@ -57,40 +60,83 @@
   function confirmModal(opts) { return MODAL ? MODAL.confirm(opts) : Promise.resolve(false); }
 
   function setBreadcrumb(active) {
-    document.querySelectorAll('.tre-step').forEach(function (b) {
-      var key = b.dataset.goto || b.dataset.step;
-      if (key === active) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    var steps = { grade: 0, map: 1, treasure: 2 }, current = steps[active];
+    document.querySelectorAll('.codex-step[data-step]').forEach(function (step, index) {
+      step.classList.toggle('is-done', index < current);
+      step.classList.toggle('is-current', index === current);
+      if (index === current) step.setAttribute('aria-current', 'step'); else step.removeAttribute('aria-current');
     });
-    var mapBtn = document.querySelector('.tre-step[data-goto="map"]'); if (mapBtn) mapBtn.disabled = !state.grade;
+    var mapBtn = document.querySelector('[data-goto="map"]');
+    if (mapBtn) mapBtn.setAttribute('aria-disabled', state.grade ? 'false' : 'true');
+    var hints = {
+      grade: state.grade ? t('已選 {grade}', { grade: gradeTag(state.grade.grade) }) : t('先選你手上的藏寶圖等級'),
+      map: state.mapId ? t('已選 {zone}', { zone: zoneName(state.mapId) }) : state.grade ? t('現在選地圖') : t('選好等級後挑地圖'),
+      treasure: state.mapId ? t('現在比對挖掘點') : t('比對謎題圖找座標'),
+    };
+    Object.keys(hints).forEach(function (key) { document.querySelector('[data-step-hint="' + key + '"]').textContent = hints[key]; });
   }
   var STEP_PANEL = { grade: 'step-grade', map: 'step-map', treasure: 'step-treasure' };
   var stepReady = false;   // 首次（載入時）showStep 不搶焦點，之後每次切換才移焦到新面板標題
   // 三步切換時把焦點移到新面板標題（tabindex=-1）→ 鍵盤/螢幕閱讀器落到新內容，不卡在舊步驟
   function focusStepHeading(name) {
     var panel = el[STEP_PANEL[name]]; if (!panel) return;
-    var h = panel.querySelector('.codex-h2'); if (!h) return;
+    var h = panel.querySelector('h2'); if (!h) return;
     h.setAttribute('tabindex', '-1');
     try { h.focus(); } catch (_) {}
   }
   function showStep(name) {
+    var changed = el[STEP_PANEL[name]].hidden;
     el['step-grade'].hidden = name !== 'grade'; el['step-map'].hidden = name !== 'map'; el['step-treasure'].hidden = name !== 'treasure';
     setBreadcrumb(name);
-    if (stepReady) focusStepHeading(name); else stepReady = true;
+    if (stepReady && changed) focusStepHeading(name); else stepReady = true;
   }
 
   // 怪物等級＝該版本上限（7.x=100 / 6.x=90 / 5.x=80 / 4.x=70 / 3.x=60；綠圖 4.05→70）。挖圖時可能出現的怪等。
+  var RECENT_KEY = 'treasure.recentPicks.v1';
+  function recentPicks() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+      if (!Array.isArray(saved)) return [];
+      return saved.filter(function (pick) {
+        var g = DATA.grades.find(function (x) { return x.itemId === pick.itemId; });
+        return g && mapsForGrade(g).mids.indexOf(pick.mapId) >= 0;
+      }).slice(0, 3);
+    } catch (e) { return []; }
+  }
+  function rememberPick(itemId, mapId) {
+    try {
+      var picks = recentPicks().filter(function (p) { return p.itemId !== itemId || p.mapId !== mapId; });
+      picks.unshift({ itemId: itemId, mapId: mapId });
+      localStorage.setItem(RECENT_KEY, JSON.stringify(picks.slice(0, 3)));
+    } catch (e) { /* 儲存不可用不阻斷查圖 */ }
+    renderRecent();
+  }
+  function renderRecent() {
+    var host = el['recent-picks']; host.textContent = '';
+    var picks = recentPicks(); host.hidden = !picks.length;
+    if (!picks.length) return;
+    var label = document.createElement('span'); label.className = 'tre-recent__label'; label.appendChild(visual.icon('clock'));
+    label.appendChild(document.createTextNode(t('繼續上次'))); host.appendChild(label);
+    picks.forEach(function (pick) {
+      var g = DATA.grades.find(function (x) { return x.itemId === pick.itemId; });
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'codex-btn codex-btn--ghost';
+      b.textContent = t('{grade}・{zone}', { grade: gradeTag(g.grade), zone: zoneName(pick.mapId) });
+      b.addEventListener('click', function () { selectGrade(g); selectMap(pick.mapId); }); host.appendChild(b);
+    });
+  }
   function monsterLevel(exp) { var maj = parseInt(exp, 10); return (maj >= 2 && maj <= 9) ? 30 + maj * 10 : null; }
 
   // ── Step 1：等級 ──
   function renderGrades() {
+    renderRecent();
     el['grade-grid'].textContent = '';
     DATA.grades.forEach(function (g) {
-      var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-card';
+      var card = document.createElement('button'); card.type = 'button'; card.className = 'codex-card codex-card--info tre-card';
       var top = document.createElement('div'); top.className = 'tre-card__top';
       var gradeEl = document.createElement('span'); gradeEl.className = 'tre-card__grade'; gradeEl.textContent = gradeTag(g.grade);
       top.appendChild(gradeEl);
       var lv = monsterLevel(g.expansion);
-      if (lv) { var lvEl = document.createElement('span'); lvEl.className = 'tre-card__lvl'; lvEl.textContent = t('怪 Lv.{lv}', { lv: lv }); lvEl.title = t('挖圖時可能出現的怪物等級'); top.appendChild(lvEl); }
+      if (lv) { var lvEl = badge(t('怪 Lv.{lv}', { lv: lv }), 'gold'); lvEl.setAttribute('data-help', t('挖圖時可能出現的怪物等級')); top.appendChild(lvEl); }
       var name = document.createElement('span'); name.className = 'tre-card__name'; name.textContent = t(g.name);   // 遊戲官方名：字典的生成區塊有 en/ja（tools/build-i18n-names.py）
       var meta = document.createElement('span'); meta.className = 'tre-card__meta';
       meta.appendChild(badge(g.partySize === 8 ? t('8 人') : t('單人')));
@@ -101,7 +147,7 @@
          「哪一個採集點會出」解包裡不存在（已掃過 GatheringPointBase 全表零命中），所以只給等級。 */
       if (g.gatherLevel) {
         var how = document.createElement('span'); how.className = 'tre-card__how codex-small';
-        how.textContent = t('⛏ 採集 Lv.{lv} 以上的點可能挖到', { lv: g.gatherLevel });
+        how.textContent = t('採集 Lv.{lv} 以上的點可能挖到', { lv: g.gatherLevel });
         card.appendChild(how);
       }
       // 挖掘區域速查：不點進去也看得到這張圖會出現在哪幾張地圖
@@ -109,7 +155,7 @@
       if (mids.length) {
         var zonesEl = document.createElement('span'); zonesEl.className = 'tre-card__zones';
         mids.forEach(function (mid) {
-          var z = document.createElement('span'); z.className = 'tre-card__zone codex-small'; z.textContent = zoneName(mid);
+          var z = document.createElement('span'); z.className = 'codex-chip'; z.textContent = zoneName(mid);
           zonesEl.appendChild(z);
         });
         card.appendChild(zonesEl);
@@ -131,7 +177,7 @@
     state.grade = g; state.mapId = null; renderMaps(g);
     if (LOOT) LOOT.render(g);
     if (GATHER) GATHER.render(g);
-    el['map-title'].textContent = t('{grade} · 選擇地圖', { grade: gradeLabel(g) });
+    el['map-title'].querySelector('[data-tre-title]').textContent = t('{grade} · 選擇地圖', { grade: gradeLabel(g) });
     showStep('map'); announce(t('已選 {grade}，請選地圖', { grade: gradeLabel(g) }));
   }
 
@@ -153,35 +199,48 @@
       var img = document.createElement('img'); img.className = 'tre-mapcard__thumb'; img.loading = 'lazy'; img.decoding = 'async'; img.alt = ''; if (m.image) img.src = m.image;
       var body = document.createElement('div'); body.className = 'tre-mapcard__body';
       var zone = document.createElement('span'); zone.className = 'tre-mapcard__zone codex-body'; zone.textContent = zoneName(mid);
-      var cnt = document.createElement('span'); cnt.className = 'tre-mapcard__count codex-small'; cnt.textContent = t('{n} 點', { n: counts[mid] });
+      var cnt = document.createElement('span'); cnt.className = 'codex-count tre-mapcard__count'; cnt.textContent = t('{n} 點', { n: counts[mid] });
       body.appendChild(zone); body.appendChild(cnt); card.appendChild(img); card.appendChild(body);
       card.addEventListener('click', function () { selectMap(mid); });
       el['map-grid'].appendChild(card);
     });
   }
-  function selectMap(mid) {
-    state.mapId = mid; renderTreasures(); renderMapTabs();
-    el['tre-title'].textContent = t('{zone} · {grade} 挖掘點', { zone: zoneName(mid), grade: state.grade.grade });
+  function selectMap(mid, fromTabs) {
+    state.mapId = mid; rememberPick(state.grade.itemId, mid); renderTreasures(); renderMapTabs();
+    el['tre-title'].querySelector('[data-tre-title]').textContent = t('{zone} · {grade} 挖掘點', { zone: zoneName(mid), grade: state.grade.grade });
     showStep('treasure'); announce(t('顯示 {zone} 的挖掘點', { zone: zoneName(mid) }));
+    if (fromTabs) el['map-tabs'].querySelector('[aria-selected="true"]').focus();
   }
 
-  // 同等級地圖快速切換 tab（step 3 常駐）：玩家常一次準備多張同 grade 的圖、連續挖 → 直接切，不用退回選單
+  // 重畫 tab 時先解除舊節點監聽；鍵盤切換經 onChange 直接選圖，不能再 tab.click() 遞迴派發。
+  var releaseMapTabs = null;
   function renderMapTabs() {
     var host = el['map-tabs']; if (!host) return;
+    if (releaseMapTabs) { releaseMapTabs(); releaseMapTabs = null; }
     host.textContent = '';
-    var g = state.grade; if (!g) { host.hidden = true; return; }
+    var panel = document.getElementById('tre-map-tabpanel');
+    var g = state.grade;
+    if (!g) { host.hidden = true; panel.removeAttribute('role'); panel.removeAttribute('aria-labelledby'); return; }
     var mg = mapsForGrade(g), counts = mg.counts, mids = mg.mids;
-    if (mids.length <= 1) { host.hidden = true; return; }   // 只有 1 張圖不必顯示
-    host.hidden = false;
-    var lbl = document.createElement('span'); lbl.className = 'tre-maptabs__lbl codex-small'; lbl.textContent = t('{grade} 地圖：', { grade: gradeTag(g.grade) }); host.appendChild(lbl);
+    if (mids.length <= 1) { host.hidden = true; panel.removeAttribute('role'); panel.removeAttribute('aria-labelledby'); return; }
+    host.hidden = false; panel.setAttribute('role', 'tabpanel');
     mids.forEach(function (mid) {
-      var chip = document.createElement('button'); chip.type = 'button';
-      chip.className = 'tre-maptab' + (mid === state.mapId ? ' is-active' : '');
-      chip.textContent = t('{zone}（{n}）', { zone: zoneName(mid), n: counts[mid] });
-      if (mid === state.mapId) chip.setAttribute('aria-current', 'true');
-      chip.addEventListener('click', function () { if (mid !== state.mapId) selectMap(mid); });
-      host.appendChild(chip);
+      var tab = document.createElement('button'); tab.type = 'button'; tab.className = 'codex-tab codex-tab--boxed'; tab.setAttribute('role', 'tab');
+      tab.id = 'tre-map-tab-' + mid; tab.setAttribute('aria-controls', panel.id);
+      tab.setAttribute('aria-selected', mid === state.mapId ? 'true' : 'false'); tab.tabIndex = mid === state.mapId ? 0 : -1;
+      var name = document.createElement('span'); name.textContent = zoneName(mid);
+      var count = document.createElement('span'); count.className = 'codex-count'; count.textContent = String(counts[mid]);
+      tab.appendChild(name); tab.appendChild(count);
+      host.appendChild(tab);
     });
+    panel.setAttribute('aria-labelledby', 'tre-map-tab-' + state.mapId);
+    if (window.FFXIVA11y && FFXIVA11y.initTabs) {
+      releaseMapTabs = FFXIVA11y.initTabs(host, { onChange: function (_, i) { if (mids[i] !== state.mapId) selectMap(mids[i], true); } });
+    } else {
+      host.querySelectorAll('[role="tab"]').forEach(function (tab, i) {
+        tab.addEventListener('click', function () { if (mids[i] !== state.mapId) selectMap(mids[i], true); });
+      });
+    }
   }
 
   // ── Step 3：挖掘點（➕ = 加入房間共享路線）──
@@ -198,20 +257,22 @@
       var off = TC.calcCardOffset({ x: p.x, y: p.y }, sf, DIG_W, DIG_H);
       // button（非 div）→ 鍵盤可 Tab/Enter/Space 操作、螢幕閱讀器可播報（加入共享路線是核心互動）
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-dig'; card.dataset.idx = i; card.dataset.key = p.id;
-      card.setAttribute('aria-label', t('加入共享路線 X:{x} Y:{y}', { x: p.x, y: p.y }));
-      card.setAttribute('aria-pressed', hasMine(p) ? 'true' : 'false');
+      card.setAttribute('aria-label', ROOM && ROOM.isInRoom()
+        ? t('加入共享路線 X:{x} Y:{y}', { x: p.x, y: p.y })
+        : t('放大地圖並複製座標 X:{x} Y:{y}', { x: p.x, y: p.y }));
+      if (ROOM && ROOM.isInRoom()) card.setAttribute('aria-pressed', hasMine(p) ? 'true' : 'false');
       if (hasMine(p)) card.classList.add('is-added');
       var mapDiv = document.createElement('div'); mapDiv.className = 'tre-dig__map';
       if (m.image) mapDiv.style.backgroundImage = 'url("' + m.image + '")';
       mapDiv.style.left = off.x + 'px'; mapDiv.style.top = off.y + 'px';
       var pin = document.createElement('span'); pin.className = 'tre-dig__pin';
       var num = document.createElement('span'); num.className = 'tre-dig__num'; num.textContent = String(i + 1);
-      var tick = document.createElement('span'); tick.className = 'tre-dig__tick'; tick.setAttribute('aria-hidden', 'true');   // ➕/✓ 常駐 affordance 由 CSS ::after 依 .is-added 切
+      var tick = document.createElement('span'); tick.className = 'tre-dig__tick'; tick.setAttribute('aria-hidden', 'true');
       var bar = document.createElement('div'); bar.className = 'tre-dig__bar';
       var co = document.createElement('span'); co.className = 'tre-dig__co'; co.textContent = 'X:' + p.x + ' Y:' + p.y;
       bar.appendChild(co);
       card.appendChild(mapDiv); card.appendChild(pin); card.appendChild(num); card.appendChild(tick); card.appendChild(bar);
-      card.title = t('點一下加入 / 移出共享路線');
+      card.title = digCardTitle();
       card.addEventListener('click', function () { toggleMine(p); });
       card.addEventListener('mouseenter', function () { highlight(i, false); });
       card.addEventListener('focus', function () { highlight(i, false); });
@@ -222,13 +283,24 @@
     el['full-map'].style.backgroundImage = m.image ? 'url("' + m.image + '")' : 'none';
     pts.forEach(function (p, i) {
       var pct = TC.coordsToPercent({ x: p.x, y: p.y }, sf);
-      var mk = document.createElement('button'); mk.type = 'button'; mk.className = 'tre-fullmap__marker'; mk.dataset.idx = i;
-      mk.style.left = pct.x + '%'; mk.style.top = pct.y + '%'; mk.textContent = String(i + 1); mk.title = 'X:' + p.x + ' Y:' + p.y;
+      var mk = document.createElement('button'); mk.type = 'button'; mk.className = 'codex-map-pin tre-fullmap__marker'; mk.dataset.idx = i;
+      mk.style.left = pct.x + '%'; mk.style.top = pct.y + '%'; mk.textContent = String(i + 1); mk.setAttribute('aria-label', t('挖掘點 {n}：X:{x} Y:{y}', { n: i + 1, x: p.x, y: p.y }));
       mk.addEventListener('click', function () { highlight(i, true); });
       mk.addEventListener('mouseenter', function () { highlight(i, true); });
       el['full-map'].appendChild(mk);
     });
-    el['full-map-info'].textContent = t('{n} 個挖掘點 · 點卡片即可加入共享路線', { n: pts.length });
+    refreshDigCopy();
+  }
+
+  function digCardTitle() {
+    return ROOM && ROOM.isInRoom() ? t('點一下加入 / 移出共享路線') : t('放大地圖並複製座標');
+  }
+  function refreshDigCopy() {
+    var inRoom = ROOM && ROOM.isInRoom();
+    var count = el['dig-grid'].childElementCount;
+    el['tre-dig-hint'].textContent = inRoom ? t('比對謎題圖，點卡片加入共享路線。') : t('比對謎題圖，點卡片放大地圖並複製座標。');
+    el['full-map-info'].textContent = inRoom ? t('{n} 個挖掘點 · 點卡片即可加入共享路線', { n: count })
+      : t('{n} 個挖掘點 · 點卡片可放大地圖', { n: count });
   }
 
   function highlight(i, scrollDig) {
@@ -236,14 +308,20 @@
       var on = +c.dataset.idx === i; c.classList.toggle('is-hl', on);
       if (on && scrollDig && c.scrollIntoView) c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
-    el['full-map'].querySelectorAll('.tre-fullmap__marker').forEach(function (c) { c.classList.toggle('is-active', +c.dataset.idx === i); });
+    el['full-map'].querySelectorAll('.tre-fullmap__marker').forEach(function (c) { c.classList.toggle('codex-map-pin--active', +c.dataset.idx === i); });
   }
   function refreshDigAdded() {
     var own = ROOM ? ROOM.owner() : '';
     el['dig-grid'].querySelectorAll('.tre-dig').forEach(function (c) {
       var on = shared.points.some(function (q) { return q.key === own + ':' + c.dataset.key; });
       c.classList.toggle('is-added', on);
-      c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (ROOM && ROOM.isInRoom()) c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      else c.removeAttribute('aria-pressed');
+      c.title = digCardTitle();
+      var p = (DATA.byItem[state.grade.itemId] || []).find(function (q) { return String(q.id) === c.dataset.key; });
+      if (p) c.setAttribute('aria-label', ROOM && ROOM.isInRoom()
+        ? t('加入共享路線 X:{x} Y:{y}', { x: p.x, y: p.y })
+        : t('放大地圖並複製座標 X:{x} Y:{y}', { x: p.x, y: p.y }));
     });
   }
 
@@ -257,8 +335,15 @@
 
   function toggleMine(p) {
     if (!ROOM || !ROOM.isInRoom()) {
-      toast(t('多人挖寶？先在上方「建立 / 加入房間」'), 'warn');
-      if (el['room-bar'] && el['room-bar'].scrollIntoView) el['room-bar'].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      var m = DATA.maps[p.map] || {}, sf = m.sizeFactor || 100;
+      var all = (DATA.byItem[state.grade.itemId] || []).filter(function (q) { return q.map === p.map; });
+      MODAL.mapView({
+        title: zoneName(p.map), image: m.image,
+        markers: all.map(function (q, i) { return { pct: TC.coordsToPercent({ x: q.x, y: q.y }, sf), label: String(i + 1), active: q.id === p.id }; }),
+        aetherytes: (m.aetherytes || []).map(function (a) { return TC.coordsToPercent({ x: a.x, y: a.y }, sf); }),
+        coordText: t('X:{x} Y:{y}', { x: p.x, y: p.y }),
+        onCopy: function () { copyCoords(m, p); },
+      });
       return;
     }
     if (!ensureConnected()) return;
@@ -268,80 +353,11 @@
     // 即時 toast 給操作回饋（不等廣播）；卡片 ✓ 狀態仍由 DO 廣播回 refreshDigAdded 更新
   }
 
-  // ── 房間 bar ──
-  function roomBtn(text, fn, variant) {
-    var b = document.createElement('button'); b.type = 'button'; b.className = 'codex-btn codex-btn--' + (variant || 'ghost'); b.textContent = text; b.addEventListener('click', fn); return b;
-  }
-  // 「我的名稱」：寫回 portal 設定 character.name（跨工具共享身份，不另存一份）。
-  // 名稱是加點當下快照進 DO 每個點的 → 改名只影響之後加的點（提示寫在 hint，不假裝會回溯）。
-  function makeNameGroup() {
-    var g = document.createElement('div'); g.className = 'tre-roombar__group';
-    var lbl = document.createElement('span'); lbl.className = 'tre-roombar__grouplbl codex-small'; lbl.textContent = t('我的名稱：'); g.appendChild(lbl);
-    var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-name-input';
-    inp.maxLength = 24; inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
-    inp.setAttribute('aria-label', t('我在共享路線顯示的名稱'));
-    inp.title = t('隊友在共享路線上看到的名稱（改名只影響之後加的點）');
-    inp.addEventListener('change', function () {
-      var before = inp.value;
-      if (!ROOM.setName(inp.value)) { toast(t('名稱未能儲存（設定服務未載入）'), 'error'); return; }
-      inp.value = ROOM.customName(); inp.placeholder = ROOM.ownerName();
-      if (inp.value) toast(t('顯示名稱已改為「{name}」（之後加的點生效）', { name: inp.value }), 'ok');
-      else if (before.trim()) toast(t('名稱已清空，改回預設「{name}」', { name: ROOM.ownerName() }), 'ok');
-    });
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') inp.blur(); });
-    g.appendChild(inp);
-    return g;
-  }
-  function renderRoomBar() {
-    if (!el['room-bar']) return;
-    if (!ROOM) { el['room-bar'].hidden = true; return; }
-    // 整條 bar 每次事件（隊友加點/上線數）都重畫 → 正在打字的名稱欄會被抹掉；先接住值與游標位置再還原。
-    var act = document.activeElement;
-    var keepName = (act && act.classList && act.classList.contains('tre-name-input'))
-      ? { v: act.value, s: act.selectionStart } : null;
-    el['room-bar'].hidden = false; el['room-bar'].textContent = '';
-    var hud = document.createElement('span'); hud.className = 'codex-hud'; hud.setAttribute('aria-hidden', 'true'); el['room-bar'].appendChild(hud);
-    var row = document.createElement('div'); row.className = 'tre-roombar__row'; el['room-bar'].appendChild(row);
-    if (ROOM.isInRoom()) {
-      var lbl = document.createElement('span'); lbl.className = 'tre-roombar__label codex-body'; lbl.textContent = t('房間'); row.appendChild(lbl);
-      var codeEl = document.createElement('span'); codeEl.className = 'tre-roombar__code'; codeEl.textContent = ROOM.getCode(); row.appendChild(codeEl);
-      row.appendChild(roomBtn(t('📋 複製碼'), function () { copyText(ROOM.getCode()).then(function (ok) { toast(ok ? t('已複製房號') : ROOM.getCode(), 'ok'); }); }));
-      row.appendChild(roomBtn(t('🔗 邀請連結'), function () { copyText(ROOM.inviteUrl()).then(function (ok) { toast(ok ? t('已複製邀請連結') : t('複製失敗'), ok ? 'ok' : 'error'); }); }));
-      var on = document.createElement('span'); on.className = 'tre-roombar__online codex-small';
-      on.textContent = ROOM.isConnected() ? t('👥 {n} 人', { n: shared.online || 1 })
-        : t('👥 {n} 人（連線中…）', { n: shared.online || 1 }); row.appendChild(on);
-      if (ROOM.canSetName()) row.appendChild(makeNameGroup());
-      row.appendChild(roomBtn(t('離開'), function () { ROOM.leave(); }));
-    } else {
-      // 建立（自動產碼）— 與「加入」明確分開
-      var createG = document.createElement('div'); createG.className = 'tre-roombar__group';
-      var cl = document.createElement('span'); cl.className = 'tre-roombar__grouplbl codex-small'; cl.textContent = t('開新房間：'); createG.appendChild(cl);
-      createG.appendChild(roomBtn(t('＋ 建立房間'), function () {
-        ROOM.create().then(function (c) { toast(t('房間已建立：{code}（把房號或邀請連結給隊友）', { code: c }), 'ok'); }).catch(function () { toast(t('建立失敗（後端未連上）'), 'error'); });
-      }, 'primary'));
-      var ch = document.createElement('span'); ch.className = 'tre-roombar__grouphint codex-xs'; ch.textContent = t('房號自動產生，分享給隊友'); createG.appendChild(ch);
-      row.appendChild(createG);
-      var orEl = document.createElement('span'); orEl.className = 'tre-roombar__or codex-small'; orEl.textContent = t('或'); row.appendChild(orEl);
-      // 加入（貼朋友的房號）
-      var joinG = document.createElement('div'); joinG.className = 'tre-roombar__group';
-      var jl = document.createElement('span'); jl.className = 'tre-roombar__grouplbl codex-small'; jl.textContent = t('加入朋友的房間：'); joinG.appendChild(jl);
-      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'codex-input tre-room-input'; inp.placeholder = t('朋友給的 6 碼房號'); inp.maxLength = 6; inp.setAttribute('aria-label', t('輸入朋友的房號')); joinG.appendChild(inp);
-      var doJoin = function () { if (!ROOM.join(inp.value)) toast(t('房號需 6 碼'), 'warn'); };
-      joinG.appendChild(roomBtn(t('加入'), doJoin));
-      inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); });
-      var hist = ROOM.history();
-      if (hist.length) {
-        var hl = document.createElement('span'); hl.className = 'codex-small tre-roombar__grouphint'; hl.textContent = t('最近：'); joinG.appendChild(hl);
-        hist.forEach(function (c) { var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'tre-room-chip'; chip.textContent = c; chip.addEventListener('click', function () { ROOM.join(c); }); joinG.appendChild(chip); });
-      }
-      row.appendChild(joinG);
-    }
-    if (keepName) {
-      var back = el['room-bar'].querySelector('.tre-name-input');
-      if (back) { back.value = keepName.v; back.focus(); try { back.setSelectionRange(keepName.s, keepName.s); } catch (_) {} }
-    }
-  }
 
+  var ROOM_BAR = window.TreasureRoomBar && window.TreasureRoomBar.create({
+    el: el['room-bar'], ROOM: ROOM, getShared: function () { return shared; }, toast: toast, copyText: copyText,
+  });
+  function renderRoomBar() { if (ROOM_BAR) ROOM_BAR.render(); }
   // 共享路線面板走 route-panel.js（渲染 + 面板動作）；依賴由此注入，該檔不自己抓房間狀態/資料。
   var PANEL = window.TreasureRoutePanel ? window.TreasureRoutePanel.create({
     el: el, TC: TC, RMAP: RMAP, MODAL: MODAL, ROOM: ROOM,
@@ -351,9 +367,10 @@
     ensureConnected: ensureConnected, confirmModal: confirmModal,
   }) : null;
   function renderRoom() { if (PANEL) PANEL.render(); }
+  if (PANEL) PANEL.onGoGrade(function () { showStep('grade'); el['step-grade'].scrollIntoView({ block: 'start' }); });
 
-  document.querySelectorAll('.tre-step[data-goto]').forEach(function (b) {
-    b.addEventListener('click', function () { var t = b.dataset.goto; if (t === 'grade') showStep('grade'); else if (t === 'map' && state.grade) showStep('map'); });
+  document.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.addEventListener('click', function () { var next = b.dataset.goto; if (next === 'grade') showStep('grade'); else if (next === 'map' && state.grade) showStep('map'); });
   });
   document.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { showStep(b.dataset.back); }); });
 
@@ -363,7 +380,13 @@
     var prevCount = shared.points.length, prevOnline = shared.online;
     var newPts = st.points || [];
     shared.points = newPts; shared.online = st.online || 0;
-    renderRoomBar(); renderRoom(); refreshDigAdded();
+    if (st.status === 'joining' || st.status === 'created' || st.status === 'left' || st.status === 'disconnected') shared.synced = false;
+    if (st.status === 'init' || st.status === 'state') shared.synced = true;
+    renderRoomBar(); renderRoom();
+    if (state.mapId !== null) {
+      refreshDigAdded();
+      refreshDigCopy();
+    }
     // 連線/同步狀態回饋（斷線時 op 會被丟棄 → 讓使用者看得到）
     if (st.status === 'joining' || st.status === 'created' || st.status === 'left') disconnectedOnce = false;
     // 連線/同步事件同步進 #tre-status（aria-live）→ 螢幕閱讀器聽得到，不只靠視覺 toast（U3）
@@ -390,10 +413,18 @@
     }
   });
 
-  function fatalErr(msg) { el['grade-grid'].textContent = ''; var p = document.createElement('p'); p.className = 'tre-error codex-body'; p.textContent = msg; el['grade-grid'].appendChild(p); }
+  function fatalErr(err) {
+    console.error('藏寶圖資料載入失敗', err);
+    el['grade-grid'].textContent = '';
+    var box = document.createElement('div'); box.className = 'codex-empty codex-empty--bare';
+    var p = document.createElement('p'); p.textContent = t('藏寶圖資料暫時無法載入，請重新整理後再試。');
+    var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'codex-btn codex-btn--ghost';
+    retry.textContent = t('重新整理'); retry.addEventListener('click', function () { location.reload(); });
+    box.appendChild(visual.icon('warning')); box.appendChild(p); box.appendChild(retry); el['grade-grid'].appendChild(box);
+  }
   function load() {
     renderRoomBar(); renderRoom();   // 先畫房間 bar（即使資料還沒到 / 已自動重連）
-    if (!TC) { fatalErr(t('核心模組未載入（treasure-core.js），請重新整理。')); return; }
+    if (!TC) { fatalErr(new Error('treasure-core.js missing')); return; }
     Promise.all([
       fetch('data/grades.json').then(function (r) { return r.json(); }),
       fetch('data/maps.json').then(function (r) { return r.json(); }),
@@ -402,7 +433,7 @@
       DATA.grades = res[0].grades || []; DATA.maps = res[1].maps || {}; DATA.byItem = {};
       (res[2].treasures || []).forEach(function (p) { (DATA.byItem[p.item] = DATA.byItem[p.item] || []).push(p); });
       renderGrades(); showStep('grade'); announce(t('已載入 {n} 個等級', { n: DATA.grades.length }));
-    }).catch(function (e) { fatalErr(t('資料載入失敗，請重新整理。（{err}）', { err: (e && e.message) || e })); });
+    }).catch(fatalErr);
   }
   load();
 })();

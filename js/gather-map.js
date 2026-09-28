@@ -74,21 +74,21 @@
           return byMap[b].length - byMap[a].length
             || String((d.maps[a] || {}).zone).localeCompare(String((d.maps[b] || {}).zone), 'zh-Hant');
         });
-        var h = document.createElement('h3'); h.className = 'codex-h3 tre-gather__title';
-        h.textContent = t('去哪採到這張圖（採集 Lv.{lv}，{n} 處）', { lv: lv, n: pts.length });
+        var h = document.createElement('h3'); h.className = 'codex-h3 codex-h3--section tre-gather__title';
+        h.appendChild(document.createTextNode(t('去哪採到這張圖')));
+        var sub = document.createElement('span'); sub.className = 'codex-h3__sub'; sub.textContent = t('採集 Lv.{lv}・{n} 處', { lv: lv, n: pts.length }); h.appendChild(sub);
         var note = document.createElement('p'); note.className = 'tre-gather__note codex-small';
-        /* ⚠️ 文案不寫「解包」這種內部術語（Owner 2026-08-16），但**誠實性不能一起丟掉**：
-           「不保證每個點都會出」就是「這是依等級推導、不是官方逐點保證」的玩家語言版。 */
-        note.textContent = t('符合這張圖採集等級的採集點（不保證每個點都會出）；點地區看點位。');
+        note.textContent = t('以下是符合採集等級的地點，不保證每個點都會出這張圖。');
         var list = document.createElement('div'); list.className = 'tre-gather__zones';
         mids.forEach(function (mid) {
-          var b = document.createElement('button'); b.type = 'button'; b.className = 'tre-gather__zone codex-small';
-          b.textContent = t('{zone}（{n}）', { zone: t((d.maps[mid] || {}).zone), n: byMap[mid].length });
+          var b = document.createElement('button'); b.type = 'button'; b.className = 'codex-chip';
+          b.appendChild(document.createTextNode(t((d.maps[mid] || {}).zone) + ' '));
+          var count = document.createElement('span'); count.className = 'codex-count'; count.textContent = String(byMap[mid].length); b.appendChild(count);
           b.addEventListener('click', function () { openMap(lv, mid, byMap[mid]); });
           list.appendChild(b);
         });
         box.appendChild(h); box.appendChild(note); box.appendChild(list); box.hidden = false;
-      }, function () { /* 非核心資料：載不到就不顯示這塊，不擋選地圖 */ });
+      }, function (err) { console.warn('採集資料載入失敗', err); /* 非核心資料不擋選地圖 */ });
     }
 
     return { render: render };

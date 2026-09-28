@@ -21,8 +21,9 @@
 - **CSP `img-src` 漂移**（2026-07-30 實踩）：資料重建讓地圖網址換成 v2.xivapi.com、CSP 沒跟 → 線上地圖全黑。**本機 `python -m http.server` 不套 `_headers`，CSP 問題本地測不出來**。
 - **`#grade-grid` CLS**（2026-08-23）：等級格由 JS 填（HTML 裡先放「… 展開卷軸 …」一行，約 50px），填完是 680px（1440）～**2340px（390）** ⇒ 把緊接其後的 footer 推出畫面，390px 實測 CLS 0.135。最終高度隨欄數變動一個量級、逐斷點釘不實際 ⇒ 用 `min-height: 72svh` 讓 footer 一開始就在 fold 外（同 ranking `#tableWrap`／sightseeing `.ss-grid`）。修後 1440/1280/900/600/390＝0.015/0.019/0.025/0.051/0.054。本站桌機 0.032 看起來沒事、手機才是 0.124 ⇒ 哨兵必須**逐寬度**掃。
 - **`DIG_W/DIG_H` 雙寫**：裁切卡偏移用 JS 常數、卡片視窗尺寸用 CSS，漂移 → pin 偏離挖掘點。
-- **檔案拆分沿革**：`js/app.js` 2026-07-30 由 505 行按職責拆出 `app-modal.js`（對話框）／`route-map.js`（區域大圖）／`route-panel.js`（共享路線面板）；2026-08-16 再把 step 2 的兩個補充區塊拆成 `loot-panel.js`／`gather-map.js`，現 408 行，其餘各檔偏小。
+- **檔案拆分沿革**：`js/app.js` 2026-07-30 由 505 行按職責拆出 `app-modal.js`（對話框）／`route-map.js`（區域大圖）／`route-panel.js`（共享路線面板）；2026-08-16 再把 step 2 的兩個補充區塊拆成 `loot-panel.js`／`gather-map.js`（行數以 `wc -l` 為準）。
 - **文案不寫內部術語**（Owner 2026-08-16）：但誠實性不能跟著消失——「這是推導、不保證」要改寫成玩家語言（例：「符合這張圖採集等級的採集點（不保證每個點都會出）」），不是刪掉。
+- **v2.0 改版複審三件（2026-09-28）**：① `recent-picks` 在資料 fetch 前同步依 localStorage 顯示、窄螢幕單列橫捲——否則三筆折行讓等級卡在資料到齊時下推（393px 列高 48→84、320px 48→159）。② step 3 高亮改切 portal `.codex-map-pin--active`：改版刪了本地 `.tre-fullmap__marker.is-active` 規則而 JS 仍切舊 class，卡片↔地圖對照靜默失效。③ `aria-label` 會整個蓋掉子元素文字，掉落查價連結的可讀名稱須自帶寶箱編號／數量／機率。
 
 ## 資料與名稱權威
 

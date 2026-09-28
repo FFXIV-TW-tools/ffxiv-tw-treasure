@@ -1,5 +1,6 @@
 .claude
 .gitignore
+.gitattributes
 AGENTS.md
 CHANGELOG.md
 CLAUDE.md

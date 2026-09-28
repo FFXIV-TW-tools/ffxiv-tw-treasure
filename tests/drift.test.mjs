@@ -6,8 +6,8 @@
 //  4. 傳送水晶資料形狀、座標值域與總量不塌
 //  5. 每個頂層 tracked 項目都已列入 deploy-allow / deploy-deny
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execSync, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -104,5 +104,14 @@ assert.deepEqual(unclassified, [], `頂層項目未分類（CF build 會 fail-cl
 // 現況無交集，這條是擋未來把內部資產誤寫進 allow 又以為 deny 擋得住。
 const both = [...allow].filter((e) => deny.has(e));
 assert.deepEqual(both, [], `同一項目同時列在 allow 與 deny（腳本 allow 先判 → deny 形同無效）：${both.join(', ')}`);
+// 生成圖示以 portal 正典為權威；CI 只有本站 checkout 時明示 skip，漂移仍須紅燈。
+const iconGen = join(ROOT, '..', 'ffxiv-tw-tools-portal', 'tools', 'gen-site-icons.mjs');
+if (!existsSync(iconGen)) {
+  console.log('skip icons drift：本機沒有 portal 共用產生器');
+} else {
+  const iconCheck = spawnSync(process.execPath, [iconGen, '--config', 'tools/icons.config.json', '--check'], { cwd: ROOT, encoding: 'utf8' });
+  if (iconCheck.status === 2) console.log(`skip icons drift：${(iconCheck.stderr || '').trim()}`);
+  else assert.equal(iconCheck.status, 0, `圖示產物與正典漂移：${iconCheck.stdout || ''}${iconCheck.stderr || ''}`);
+}
 
 console.log(`drift: ${asserts} assertions passed`);

@@ -40,6 +40,7 @@
     '<link rel="stylesheet" href="' + base + 'tokens.css">' +
     '<link rel="stylesheet" href="' + base + 'header.css">' +
     '<script defer src="' + base + 'header.js"><\/script>' +
+    '<script defer src="' + base + 'a11y-tabs.js"><\/script>' +
     '<script defer src="' + base + 'settings-client.js"><\/script>'
   );
 })();</script>
@@ -96,6 +97,9 @@
 <script defer src="js/treasure-core.js"></script>
 <script defer src="js/room-pure.js"></script>
 <script defer src="js/room.js"></script>
+<script defer src="js/tre-icons.js"></script>
+<script defer src="js/tre-visual.js"></script>
+<script defer src="js/room-bar.js"></script>
 <script defer src="js/app-modal.js"></script>
 <script defer src="js/route-map.js"></script>
 <script defer src="js/route-panel.js"></script>
@@ -142,25 +146,19 @@
 
   <main class="codex-container">
 
-    <!-- 引導 intro -->
-    <section class="codex-tablet codex-tablet--cyan tre-intro">
-      <span class="codex-hud" aria-hidden="true"></span>
-      <p class="codex-body" data-i18n-html="🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。">🗺️ 開了藏寶圖卻認不出在哪？<b>選等級 → 選地圖 → 跟遊戲裡的謎題圖肉眼比對</b>，找到一樣的就照座標去挖。</p>
-      <p class="codex-body tre-intro__feat" data-i18n-html="✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。">✨ <b>多人挖寶</b>：建立房間給隊友房號 → 每人把自己解到的點加進<b>共享路線</b> → 自動排<b>最省順序</b>、即時同步（單人一次只解一張圖，查到座標即可）。</p>
-    </section>
+    <!-- 房間卡獨立於單人三步流程。 -->
 
     <!-- 多人房間（建立 / 加入 / 房號 / 在線人數 / 邀請）— app.js 依狀態 render -->
-    <section id="room-bar" class="codex-tablet codex-tablet--cyan tre-roombar">
+    <section id="room-bar" class="codex-tablet codex-tablet--cyan codex-glow tre-roombar">
       <span class="codex-hud" aria-hidden="true"></span>
     </section>
 
-    <!-- 步驟列 -->
-    <nav class="tre-steps" aria-label="步驟" data-i18n-attr="aria-label:步驟">
-      <button type="button" class="tre-step" data-goto="grade" data-i18n="① 選等級">① 選等級</button>
-      <span class="tre-steps__sep" aria-hidden="true">›</span>
-      <button type="button" class="tre-step" data-goto="map" disabled data-i18n="② 選地圖">② 選地圖</button>
-      <span class="tre-steps__sep" aria-hidden="true">›</span>
-      <span class="tre-step tre-step--static" data-step="treasure" data-i18n="③ 挖掘點">③ 挖掘點</span>
+    <nav class="tre-steps" aria-label="挖寶步驟" data-i18n-attr="aria-label:挖寶步驟">
+      <ol class="codex-steps">
+        <li class="codex-step is-current" data-step="grade" aria-current="step"><span class="codex-step__mark" aria-hidden="true"></span><span class="codex-step__body"><button class="tre-step__jump" type="button" data-goto="grade" data-i18n="選等級">選等級</button><span class="codex-step__hint" data-step-hint="grade" data-i18n="先選你手上的藏寶圖等級">先選你手上的藏寶圖等級</span></span></li>
+        <li class="codex-step" data-step="map"><span class="codex-step__mark" aria-hidden="true"></span><span class="codex-step__body"><button class="tre-step__jump" type="button" data-goto="map" aria-disabled="true" aria-describedby="tre-map-locked" data-i18n="選地圖">選地圖</button><span id="tre-map-locked" class="codex-step__hint" data-step-hint="map" data-i18n="選好等級後挑地圖">選好等級後挑地圖</span></span></li>
+        <li class="codex-step" data-step="treasure"><span class="codex-step__mark" aria-hidden="true"></span><span class="codex-step__body"><span class="codex-step__title" data-i18n="找挖掘點">找挖掘點</span><span class="codex-step__hint" data-step-hint="treasure" data-i18n="比對謎題圖找座標">比對謎題圖找座標</span></span></li>
+      </ol>
     </nav>
 
     <div id="tre-status" class="codex-sr-only" role="status" aria-live="polite"></div>
@@ -168,13 +166,21 @@
     <!-- Step 1：選等級 -->
     <section id="step-grade" class="codex-tablet codex-tablet--cyan tre-panel">
       <span class="codex-hud" aria-hidden="true"></span>
-      <h2 class="codex-h2" data-i18n="選擇藏寶圖等級">選擇藏寶圖等級</h2>
+      <h2 class="codex-view-title"><span class="codex-view-title__ico" aria-hidden="true" data-tre-icon="scroll"></span><span data-i18n="選擇藏寶圖等級">選擇藏寶圖等級</span></h2>
       <!-- ⚠️ 原文寫「依生物皮命名，後綴 Gxx」——2026-08-13 正名後那句話是錯的：
            台服官方名是編號式（「陳舊的地圖G17」），生物皮命名是英文與国服的慣例。
            那句提示是跟著被機轉名誤導的敘述一起寫下的。 -->
       <p class="codex-body tre-hint" data-i18n="選你手上藏寶圖的等級（台服官方名為「陳舊的地圖Gxx」）。">選你手上藏寶圖的等級（台服官方名為「陳舊的地圖Gxx」）。</p>
+      <div id="recent-picks" class="tre-recent" hidden></div>
+      <script>
+        // 資料載入前先替回訪者預留最近選圖列；renderRecent() 稍後驗證地圖是否仍有效。
+        try {
+          var savedPicks = JSON.parse(localStorage.getItem('treasure.recentPicks.v1') || '[]');
+          if (Array.isArray(savedPicks) && savedPicks.length) document.getElementById('recent-picks').hidden = false;
+        } catch (e) { /* 儲存資料損壞時維持隱藏，交給 renderRecent() 處理 */ }
+      </script>
       <div id="grade-grid" class="tre-grid tre-grid--grade">
-        <p class="codex-body" data-i18n="… 展開卷軸 …">… 展開卷軸 …</p>
+        <p class="codex-body tre-loading"><span class="codex-spinner" aria-hidden="true"></span><span data-i18n="正在展開藏寶圖…">正在展開藏寶圖…</span></p>
       </div>
     </section>
 
@@ -182,8 +188,8 @@
     <section id="step-map" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2" id="map-title" data-i18n="選擇地圖">選擇地圖</h2>
-        <button type="button" class="codex-btn codex-btn--ghost" data-back="grade" data-i18n="← 換等級">← 換等級</button>
+        <h2 class="codex-view-title" id="map-title"><span class="codex-view-title__ico" aria-hidden="true" data-tre-icon="map-trifold"></span><span data-tre-title data-i18n="選擇地圖">選擇地圖</span></h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="grade"><span data-tre-icon="caret-left" aria-hidden="true"></span><span data-i18n="換等級">換等級</span></button>
       </div>
       <div id="map-grid" class="tre-grid tre-grid--map"></div>
       <!-- 去哪採到這張圖（內容由 js/gather-map.js 依等級重建，走 t()）-->
@@ -196,17 +202,19 @@
     <section id="step-treasure" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2" id="tre-title" data-i18n="挖掘點">挖掘點</h2>
-        <button type="button" class="codex-btn codex-btn--ghost" data-back="map" data-i18n="← 換地圖">← 換地圖</button>
+        <h2 class="codex-view-title" id="tre-title"><span class="codex-view-title__ico" aria-hidden="true" data-tre-icon="map-pin"></span><span data-tre-title data-i18n="挖掘點">挖掘點</span></h2>
+        <button type="button" class="codex-btn codex-btn--ghost" data-back="map"><span data-tre-icon="caret-left" aria-hidden="true"></span><span data-i18n="換地圖">換地圖</span></button>
       </div>
-      <nav id="map-tabs" class="tre-maptabs" aria-label="同等級地圖快速切換" data-i18n-attr="aria-label:同等級地圖快速切換" hidden></nav>
-      <p class="codex-body tre-hint" data-i18n="把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片即可加入共享路線。">把遊戲內的謎題圖跟下面卡片比對，一樣的就照座標去挖。點卡片即可加入共享路線。</p>
-      <div class="tre-treasure-layout">
-        <div id="dig-grid" class="tre-grid tre-grid--dig"></div>
-        <aside class="tre-sidemap">
-          <div id="full-map" class="tre-fullmap" aria-label="全區地圖（含所有挖掘點標記）" data-i18n-attr="aria-label:全區地圖（含所有挖掘點標記）"></div>
-          <p id="full-map-info" class="codex-small tre-fullmap__info"></p>
-        </aside>
+      <nav id="map-tabs" class="codex-tabs tre-maptabs" role="tablist" aria-label="同等級地圖快速切換" data-i18n-attr="aria-label:同等級地圖快速切換" hidden></nav>
+      <div id="tre-map-tabpanel" role="tabpanel">
+        <p id="tre-dig-hint" class="codex-body tre-hint"></p>
+        <div class="tre-treasure-layout">
+          <div id="dig-grid" class="tre-grid tre-grid--dig"></div>
+          <aside class="tre-sidemap">
+            <div id="full-map" class="tre-fullmap" aria-label="全區地圖（含所有挖掘點標記）" data-i18n-attr="aria-label:全區地圖（含所有挖掘點標記）"></div>
+            <p id="full-map-info" class="codex-small tre-fullmap__info"></p>
+          </aside>
+        </div>
       </div>
     </section>
 
@@ -214,26 +222,32 @@
     <section id="route-panel" class="codex-tablet codex-tablet--cyan tre-panel" hidden>
       <span class="codex-hud" aria-hidden="true"></span>
       <div class="tre-panel__head">
-        <h2 class="codex-h2"><span data-i18n="🧭 共享路線">🧭 共享路線</span> <span id="route-count" class="codex-small"></span></h2>
-        <div class="tre-route-actions">
-          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize" data-i18n="建議順序">建議順序</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" data-help="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n-attr="data-help:複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n="📋 複製成巨集">📋 複製成巨集</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done" data-i18n="清除已完成">清除已完成</button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear" data-i18n="🗑 清空">🗑 清空</button>
+        <h2 class="codex-h3 codex-h3--section" data-i18n="共享路線">共享路線</h2>
+        <div class="codex-toolbar" role="group" aria-label="共享路線操作" data-i18n-attr="aria-label:共享路線操作">
+          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize"><span data-tre-icon="list-numbers" aria-hidden="true"></span><span data-i18n="建議順序">建議順序</span></button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" data-help="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n-attr="data-help:複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友"><span data-tre-icon="clipboard-text" aria-hidden="true"></span><span data-i18n="複製成巨集">複製成巨集</span></button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done"><span data-tre-icon="list-checks" aria-hidden="true"></span><span data-i18n="清除已完成">清除已完成</span></button>
+          <button type="button" class="codex-btn codex-btn--danger" data-route="clear"><span data-tre-icon="trash" aria-hidden="true"></span><span data-i18n="清空">清空</span></button>
         </div>
       </div>
+      <div class="codex-kpis codex-kpis--compact tre-route-kpis" id="route-kpis">
+        <div class="codex-kpi"><span class="codex-kpi__icon" data-tre-icon="map-pin" aria-hidden="true"></span><span class="codex-kpi__label" data-i18n="總點數">總點數</span><span class="codex-kpi__value" id="route-total" data-i18n="同步中">同步中</span></div>
+        <div class="codex-kpi"><span class="codex-kpi__icon" data-tre-icon="check-circle" aria-hidden="true"></span><span class="codex-kpi__label" data-i18n="已完成">已完成</span><span class="codex-kpi__value" id="route-done" data-i18n="同步中">同步中</span></div>
+        <div class="codex-kpi"><span class="codex-kpi__icon" data-tre-icon="map-trifold" aria-hidden="true"></span><span class="codex-kpi__label" data-i18n="區域">區域</span><span class="codex-kpi__value" id="route-zones" data-i18n="同步中">同步中</span></div>
+      </div>
       <p id="route-stat" class="codex-small" hidden></p>
-      <p id="route-empty" class="tre-hint" data-i18n="房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。">房間裡還沒有點。到上方挖掘點卡片點一下（右上角 ➕）把你解到的點加進來，隊友會即時看到；按「建議順序」自動排最省動線。</p>
+      <div id="route-next" class="codex-tint-panel codex-tint-panel--highlight tre-route-next" hidden><span id="route-next-text"></span><span class="codex-toolbar"><button type="button" class="codex-btn codex-btn--ghost" data-route="next-copy" data-i18n="複製座標">複製座標</button><button type="button" class="codex-btn codex-btn--ghost" data-route="next-done" data-i18n="標記完成">標記完成</button></span></div>
+      <div id="route-empty" class="codex-empty codex-empty--bare"><p data-i18n="房間裡還沒有挖掘點。先選等級和地圖，再點挖掘點卡片；隊友會即時看見。">房間裡還沒有挖掘點。先選等級和地圖，再點挖掘點卡片；隊友會即時看見。</p><button type="button" class="codex-btn codex-btn--ghost" data-route="go-grade" data-i18n="前往選等級">前往選等級</button></div>
       <div id="route-list" class="tre-route-list"></div>
     </section>
 
     <footer class="tre-footer">
-      <a class="codex-xs" href="https://xivtc.com/" data-hub-link data-i18n="← FF14 工具箱（全部工具）">← FF14 工具箱（全部工具）</a>
       <!-- ⚠️ 連結刻意留在可翻譯範圍**外**：key ＝繁中原文，而 <a href="…"> 帶雙引號，
            塞進 data-i18n-html="…" 會把屬性提前收尾。連結文字 Teamcraft 也不需要翻譯。 -->
       <p class="codex-small">
         <span data-i18n="挖掘點資料來源：">挖掘點資料來源：</span><a href="https://ffxivteamcraft.com" target="_blank" rel="noopener">Teamcraft</a><span data-i18n="；地名 / 物品名採台服官方資料原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。">；地名 / 物品名採台服官方資料原文。座標換算為 FFXIV 官方公式。本站為非官方玩家工具，與 SQUARE ENIX CO., LTD. 無關。</span>
       </p>
+      <a class="codex-xs" href="https://xivtc.com/" data-hub-link data-i18n="← FF14 工具箱（全部工具）">← FF14 工具箱（全部工具）</a>
     </footer>
   </main>
 </body>

@@ -29,24 +29,30 @@
     /* 一顆物品 chip＝查價連結。⚠️ 外連一律 rel="noopener"（新分頁拿得到 window.opener 就能改我們這頁）。 */
     function itemChip(it, withRate) {
       var a = document.createElement('a');
-      a.className = 'tre-loot__item codex-small';
+      a.className = 'codex-chip tre-loot__item';
       a.href = MARKET + it.id;
       a.target = '_blank'; a.rel = 'noopener noreferrer';
-      a.title = t('在市場板查價：{name}', { name: t(it.name) });
+      a.setAttribute('data-help', t('在市場板查價：{name}', { name: t(it.name) }));
       var nm = document.createElement('span'); nm.textContent = t(it.name); a.appendChild(nm);
+      var accessibleName = nm.textContent;
       // 機率／數量只有寶箱表那半有（`DungeonDrop` 併進來的那些沒有）⇒ 有才顯示，不要補 0%
       if (withRate && typeof it.p === 'number') {
         var meta = document.createElement('span'); meta.className = 'tre-loot__rate';
         var qty = it.min === it.max ? '×' + it.min : '×' + it.min + '–' + it.max;
         meta.textContent = (it.c ? '#' + it.c + ' ' : '') + qty + '  ' + it.p + '%';
         a.appendChild(meta);
+        accessibleName += ' · ' + meta.textContent;
       }
+      a.setAttribute('aria-label', t('在市場板查價：{name}（外部網站，另開分頁）', { name: accessibleName }));
       return a;
     }
 
     function section(title, note, items, withRate) {
       var wrap = document.createElement('div'); wrap.className = 'tre-loot__section';
-      var h = document.createElement('h4'); h.className = 'tre-loot__subtitle codex-body'; h.textContent = title;
+      var h = document.createElement('div'); h.className = 'codex-group-head';
+      var name = document.createElement('span'); name.className = 'codex-group-head__title'; name.textContent = title;
+      var count = document.createElement('span'); count.className = 'codex-count'; count.textContent = t('{n} 項', { n: items.length });
+      h.appendChild(name); h.appendChild(count);
       wrap.appendChild(h);
       if (note) { var p = document.createElement('p'); p.className = 'tre-loot__note codex-small'; p.textContent = note; wrap.appendChild(p); }
       var list = document.createElement('div'); list.className = 'tre-loot__items';
@@ -65,7 +71,7 @@
         var dungeons = d.dungeons[String(mine)] || [];
         var chest = d.loot[String(mine)] || [];
         if (!dungeons.length && !chest.length) return;
-        var h = document.createElement('h3'); h.className = 'codex-h3 tre-loot__title';
+        var h = document.createElement('h3'); h.className = 'codex-h3 codex-h3--section tre-loot__title';
         h.textContent = t('這張圖可能開出');
         box.appendChild(h);
         dungeons.forEach(function (dg) {
@@ -76,11 +82,10 @@
           // 機率是「該寶箱」的掉落率，不是逐層——資料裡沒有層數這個維度，別讓玩家誤讀。
           if (dg.chests > 1) note += t('這裡有 {n} 個寶箱（標示為 #1、#2），機率各自獨立。', { n: dg.chests });
           if (dg.hidden) note += t('另有 {n} 項台服尚未收錄中文名稱，暫不顯示。', { n: dg.hidden });
-          box.appendChild(section(t('🏛 {name}（{n} 項）', { name: t(dg.name), n: dg.items.length }),
-                                  note, dg.items, true));
+          box.appendChild(section(t(dg.name), note, dg.items, true));
         });
         if (chest.length) {
-          box.appendChild(section(t('📦 挖出的寶箱（已知 {n} 項）', { n: chest.length }),
+          box.appendChild(section(t('挖出的寶箱'),
                                   t('挖掘點寶箱的掉落，由玩家社群整理，可能不完整。'),
                                   chest, false));
         }
@@ -88,7 +93,7 @@
         tip.textContent = t('點物品可到市場板查價。');
         box.appendChild(tip);
         box.hidden = false;
-      }, function () { /* 非核心資料：載不到就不顯示這塊，不擋選地圖 */ });
+      }, function (err) { console.warn('掉落資料載入失敗', err); /* 非核心資料不擋選地圖 */ });
     }
 
     return { render: render };

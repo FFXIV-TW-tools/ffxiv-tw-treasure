@@ -11,7 +11,7 @@
   // onClose(val) 只會被呼叫一次（done 旗標）。回傳 { close, modal, footer }。
   function shell(opts, onClose) {
     var overlay = document.createElement('div'); overlay.className = 'codex-modal-overlay';
-    var modal = document.createElement('div'); modal.className = 'codex-modal'; modal.style.maxWidth = opts.maxWidth || '440px';
+    var modal = document.createElement('div'); modal.className = 'codex-modal' + (opts.wide ? ' codex-modal--wide' : '');
     modal.setAttribute('role', opts.role || 'dialog'); modal.setAttribute('aria-modal', 'true'); modal.setAttribute('aria-labelledby', opts.titleId);
     var head = document.createElement('div'); head.className = 'codex-modal__header';
     var h = document.createElement('h3'); h.className = 'codex-h3'; h.id = opts.titleId; h.style.margin = '0'; h.textContent = opts.title || '';
@@ -67,7 +67,7 @@
     opts = opts || {};
     var closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.className = 'codex-btn codex-btn--ghost'; closeBtn.textContent = t('關閉');
     var s = shell({
-      title: opts.title || t('挖掘點'), titleId: 'tre-mapview-title', maxWidth: 'min(92vw, 720px)', escValue: undefined,
+      title: opts.title || t('挖掘點'), titleId: 'tre-mapview-title', wide: true, escValue: undefined,
       build: function (body) {
         var wrap = document.createElement('div'); wrap.className = 'tre-mapview';
         if (opts.image) {
@@ -95,7 +95,7 @@
               wrap.appendChild(pin); return;
             }
             var s = document.createElement('span');
-            s.className = 'tre-fullmap__marker' + (mk.active ? ' is-active' : '');
+            s.className = 'codex-map-pin' + (mk.active ? ' codex-map-pin--active' : '');
             s.style.left = mk.pct.x + '%'; s.style.top = mk.pct.y + '%';
             s.textContent = mk.label; s.setAttribute('aria-hidden', 'true');
             wrap.appendChild(s);
@@ -109,7 +109,7 @@
       },
     }, function () {});
     if (opts.onCopy) {
-      var cp = document.createElement('button'); cp.type = 'button'; cp.className = 'codex-btn codex-btn--primary'; cp.textContent = t('📋 複製座標');
+      var cp = window.TreasureVisual.button(t('複製座標'), 'copy', 'primary');
       cp.addEventListener('click', opts.onCopy);
       s.footer.appendChild(cp);
     }

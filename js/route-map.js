@@ -1,6 +1,6 @@
 /* route-map.js — 唯一職責：把「一個地圖區的共享路線」畫成一張帶順序的地圖（純渲染器）。
  * 對外 window.TreasureRouteMap.render(opts) → element；不碰房間狀態/資料載入（呼叫端算好百分比座標傳入）。
- * 順序線用 SVG（viewBox 0..100 對應百分比座標），標記沿用 step3 全圖的 .tre-fullmap__marker 視覺語彙。
+ * 順序線用 SVG（viewBox 0..100 對應百分比座標），編號使用共用 .codex-map-pin。
  * 全程 createElement/createElementNS + textContent（無 innerHTML，CSP friendly）。 */
 (function () {
   'use strict';
@@ -44,7 +44,7 @@
 
     pts.forEach(function (p, i) {
       var b = document.createElement('button'); b.type = 'button';
-      b.className = 'tre-fullmap__marker' + (p.done ? ' is-done' : '') + (p.mine ? ' is-mine' : '');
+      b.className = 'codex-map-pin tre-routemap__marker' + (p.done ? ' is-done' : '') + (p.mine ? ' is-mine' : '');
       b.style.left = p.pct.x + '%'; b.style.top = p.pct.y + '%';
       b.textContent = p.label;
       // ⚠️ 整句一條 key，不要拆成「第 」＋數字＋「 點」——那種串接在英日文的語序下組不回通順句子。
