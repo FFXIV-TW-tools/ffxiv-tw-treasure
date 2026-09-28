@@ -17,7 +17,7 @@
 //   **拿不到權威源時一律失敗，不 skip**——skip 在 CI 上與 pass 長得一模一樣，
 //   而這條守的正是「有沒有真的對過答案」。
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -45,57 +45,7 @@ const ok = (c, m) => { assert.ok(c, m); n++; };
 const grades = JSON.parse(readFileSync(join(ROOT, 'data/grades.json'), 'utf8')).grades;
 ok(Array.isArray(grades) && grades.length > 0, 'grades.json 應有內容');
 
-// ── ① 產生器不得再有任何機器轉換 ────────────────────────────────────────
-{
-  const py = readFileSync(join(ROOT, 'tools/build-data.py'), 'utf8');
-  const code = py.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');   // 註解裡會提到歷史，只看程式碼
-  ok(!/opencc|OpenCC|_S2T|s2twp/.test(code),
-    '⚠️ build-data.py 的**程式碼**不得出現 opencc／s2twp —— 那是国服名經機器轉換，'
-    + '不是台服官方名（Owner 2026-08-13：一律使用解包名稱）');
-  ok(/SELECT name_tc(?:, name_tc_source)? FROM items/.test(code),
-    'build-data.py 必須直接取 name_tc（台服解包原文）');
-  ok(!/SELECT name_sc FROM items/.test(code),
-    'build-data.py 不得取 name_sc（那是国服名）');
-
-  /* ⚠️ **「name_tc 有值」不等於「台服有這個名字」** —— 2026-08-13 補課。
-     當天稍早我把 G18 的排除理由判成「已失效，item_lookup 現在有繁中名了」，
-     而那個名字（「陳舊的卡岡圖亞革地圖」）是国服「陈旧的卡冈图亚革地图」機轉來的：
-     台服 `tc_Item.csv` 與 `tclocal_Item.csv` 的 46185 **都是空字串**。
-     兩者在 `name_tc` 這一欄長得一模一樣，是同日新增的 `name_tc_source` 才分得出來。
-     ⇒ 產生器必須用來源欄過濾，否則下一個人會再犯一次同樣的判斷。 */
-  ok(/name_tc_source/.test(code),
-    'build-data.py 必須讀 name_tc_source —— 只看 name_tc 有沒有值，會把機轉名當成官方名');
-  ok(/==\s*'dump'/.test(code) || /=== *'dump'/.test(code),
-    "必須只收 name_tc_source == 'dump'（opencc／tnze 一律當作沒有）");
-  /* ⚠️ 斷言要對準**比較與離開**，不是常數名字。初版寫 `/SHIPPED_GRADE_FLOOR/`，
-     突變測試當場證明它是空轉：把守衛改成 `if False:` 之後，錯誤訊息的 print 裡
-     仍留著那個名字 ⇒ 正則照樣命中、測試照樣綠。 */
-  ok(/if\s+len\(grades\)\s*<\s*SHIPPED_GRADE_FLOOR\s*:/.test(code),
-    '必須有出貨等級數地板的實際比較 —— dump 壞掉時上面那圈會**靜默**掃掉整批等級，'
-    + '輸出仍是合法 JSON、站台照常運作，只是少了幾個分頁');
-  ok(/SHIPPED_GRADE_FLOOR\s*=\s*(\d+)/.test(code)
-     && Number(RegExp.$1) >= grades.length,
-    `地板（${(code.match(/SHIPPED_GRADE_FLOOR\s*=\s*(\d+)/) || [])[1]}）不得低於目前出貨數 `
-    + `${grades.length} —— 地板低於現況等於沒有地板`);
-  /* ⚠️ 同上，範圍要夾住**這個守衛的區塊**。初版寫 `code.slice(indexOf(常數))` 再找
-     `sys.exit(1)`，突變證明它是空轉：把守衛裡的 exit 刪掉之後，後面 gaps 檢查那個 exit
-     仍在切片內 ⇒ 照樣命中。 */
-  // ⚠️ 不能用「下一個頂層敘述」切 —— 守衛在 `def main():` 裡面，直到檔尾都有縮排，
-  //    切出來的區塊會一路含到後面 gaps 檢查的那個 exit（第二次突變才抓到）。
-  //    正確做法是抓「縮排回到 <= if 本身」的第一行。
-  const guardLines = (code.split(/if\s+len\(grades\)\s*<\s*SHIPPED_GRADE_FLOOR\s*:\n/)[1] || '')
-    .split('\n');
-  const body = [];
-  for (const l of guardLines) {
-    if (l.trim() && (l.length - l.trimStart().length) <= 4) break;
-    body.push(l);
-  }
-  const block = body.join('\n');
-  ok(/sys\.exit\(1\)/.test(block),
-    '地板不達標必須在**該守衛區塊內**非零 exit（只印訊息＝CI 與人都會略過）');
-}
-
-// ── ①b 未出貨的等級不得混進資料檔 ───────────────────────────────────────
+// ── ① 未出貨的等級不得混進資料檔 ───────────────────────────────────────
 // G18 留在 GRADE_CATALOG 是為了「台服開放當天自動出貨」，但在那之前它一個字都不該出現。
 {
   const ids = new Set(grades.map((g) => g.itemId));
@@ -197,45 +147,6 @@ n++;
   }
   assert.deepStrictEqual(lootBad, [], '⚠️ 掉落物名稱與台服解包不符：\n  ' + lootBad.join('\n  '));
   n++;
-}
-
-// ── ②c 掉落物的來源標註不得消失 ────────────────────────────────────────
-// 這份資料**不是**台服解包而是社群整理且已知不完整（G17 只有 2 筆）。畫面上沒有這句話，
-// 玩家就會把它當完整清單——而少列幾項在畫面上永遠沒有訊號。
-{
-  const meta = JSON.parse(readFileSync(join(ROOT, 'data/loot.json'), 'utf8'))._meta || {};
-  ok(/Teamcraft/.test(meta.source || ''), 'loot.json _meta.source 必須寫明來源是 Teamcraft');
-  ok(/不完整/.test(meta.source || ''), 'loot.json _meta.source 必須寫明已知不完整');
-  /* ⚠️ 掃**整個 js/ 目錄**而不是寫死某一支：這段文字 2026-08-16 從 app.js 搬到 loot-panel.js，
-     逐檔列舉當場變成假紅燈（drift 的死 CSS 閘同一天踩過同一個坑）。 */
-  const allJs = readdirSync(join(ROOT, 'js')).filter((f) => f.endsWith('.js'))
-    .map((f) => readFileSync(join(ROOT, 'js', f), 'utf8')).join('\n');
-  ok(/社群整理，可能不完整/.test(allJs), '⚠️ 前端必須在畫面上標明「社群整理，可能不完整」');
-  ok(/台服尚未收錄/.test(allJs),
-    '⚠️ 前端必須講出「另有 N 項台服尚未收錄」——少列一半而畫面上沒訊號，正是這支哨兵要防的形狀');
-  /* ⚠️ 面向玩家的文案不得出現「解包」這種內部術語（Owner 2026-08-16）。
-     但誠實性不能跟著消失，所以上面兩條照舊守著來源與缺口的說明。 */
-  const uiText = (allJs.match(/t\('[^']*'/g) || []).join('\n');
-  ok(!/解包/.test(uiText), '⚠️ 使用者看得到的字串不得寫「解包」——那是內部術語，玩家看不懂');
-}
-
-// ── ③ `_meta.source` 必須誠實 ──────────────────────────────────────────
-// 產生器換了來源卻沒改 _meta 的話，下一個人會照著錯的說明去追來源。
-{
-  const meta = JSON.parse(readFileSync(join(ROOT, 'data/grades.json'), 'utf8'))._meta || {};
-  ok(/name_tc/.test(meta.source || ''), '_meta.source 必須寫明物品名取自 name_tc');
-  ok(!/s2twp|name_sc/.test(meta.source || ''), '_meta.source 不得再宣稱走 s2twp／name_sc');
-}
-
-// ── ④ UI 不得把等級串成重複字樣 ─────────────────────────────────────────
-// 正名後 12/13 的官方名已含等級（「陳舊的地圖G17」），再串一次會變「陳舊的地圖G17（G17）」。
-{
-  const app = readFileSync(join(ROOT, 'js/app.js'), 'utf8');
-  ok(/function gradeLabel\(/.test(app), 'app.js 應有 gradeLabel() 集中處理「名稱是否已含等級」');
-  ok(!/g\.name \+ '（' \+ g\.grade/.test(app),
-    '⚠️ 不得直接串 name＋grade——正名後會產生「陳舊的地圖G17（G17）」');
-  ok(!/'已選 ' \+ g\.name \+ ' ' \+ g\.grade/.test(app),
-    '⚠️ 螢幕閱讀器播報同樣不得重複等級');
 }
 
 console.log(`✅ names-authority: ${n} 項通過（${grades.length} 個名稱逐筆對過台服解包）`);

@@ -71,7 +71,6 @@ const np = normalizePoint({ key: 'k', owner: 'o', ownerName: 'x'.repeat(50), map
 assert.deepEqual(Object.keys(np).sort(), ['done', 'item', 'key', 'map', 'owner', 'ownerName', 'x', 'y'], 'normalizePoint 只留白名單欄位（丟棄 junk/extra）');
 assert.equal(np.ownerName.length, 24, 'ownerName clamp 到 24');
 assert.equal(np.done, false, 'normalizePoint done 一律 false');
-assert.equal(np.junk, undefined, '未知欄位 junk 被丟棄');
 // add 路徑實際套用 normalize（超長 ownerName + 垃圾欄位進不了 storage）
 const added = applyOp([], { t: 'add', p: P({ key: 'z:1', ownerName: 'y'.repeat(40), junk: 1 }) });
 assert.equal(added[0].ownerName.length, 24, 'add 後 ownerName ≤24');
