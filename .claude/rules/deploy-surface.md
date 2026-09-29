@@ -18,4 +18,4 @@ paths:
   2. 根層檔名不可無條件 `mkdir "$OUT/${f%/*}"`（會建出「叫 index.html 的目錄」⇒ `/` 404）。
   3. 不得移除出貨前驗收閘（輸出 <3 檔／缺 index.html／內部檔混入 → 非零 exit，CF 保留前一版）。
   4. **產物路徑不得假設獨佔**——日後若接排程／並行寫入者，照 ranking B-117 做法改（建到 `_site.tmp.$$`、清單走 repo 外 `mktemp`、換名段用 `mkdir "$_site.lock"` 序列化），別重新 debug 一次。
-- **部署後驗（務必帶 cache-bust）**：`curl -sI "https://<repo>.pages.dev/AGENTS.md?cb=$(date +%s)"` → 回 `text/html` 正常（檔案不存在、走 SPA fallback）；回 `text/markdown` = 紅燈。**不帶 cache-bust 會得到假紅燈**（邊緣快取殘留，判別法見 rationale）。
+- **部署後驗（務必帶 cache-bust）**：`curl -sL -o /dev/null -w '%{http_code} %{content_type} %{url_effective}\n' "https://<repo>.pages.dev/AGENTS.md?cb=$(date +%s)"` → 回 `text/html` 正常（檔案不存在、走 SPA fallback）；回 `text/markdown` = 紅燈。pages.dev 已 301 到正式網域，**一定要 `-L` 看最後一跳**（`-sI` 只拿到轉址頁的 `text/html`＝假綠燈）。**不帶 cache-bust 會得到假紅燈**（邊緣快取殘留，判別法見 rationale）。
