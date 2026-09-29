@@ -2,6 +2,12 @@
 
 > 日期段落制（cycle 收官為段）；條目含人話「為什麼」，不從 git log 自動生成。
 > 2026-07-11 起依 DEVLOOP 隨 cycle 更新；以前的段落為回填摘要（源自 git log 與健檢報告）。
+## 2026-09-29 — 路線圖「自己加的點」改用共用金邊（短工作）
+
+- **改動**：`.tre-routemap__marker.is-mine` 由 `box-shadow` 金框改設 portal `.codex-map-pin` 的 `--pin-edge`；刪兩條與新共用預設同值的 22px 尺寸覆寫。
+- **理由**：portal 同日把地圖標記改成切角徽記（Owner 授權改 design system），標記本體是透明長方形，box-shadow 會畫成方框。
+- **影響**：只動外觀；須與 portal 該改動一起上線（portal 先推、本站緊接著推）。
+
 ## 2026-09-28 — 頁尾「← FF14 工具箱」固定在頁尾最後、置中（短工作）
 
 - **改動**：把 `[data-hub-link]` 從頁尾第一行搬到 `<footer>` 最後一個元素；水平置中由 portal 共用層負責（`display:block`＋`margin-inline:auto`）。

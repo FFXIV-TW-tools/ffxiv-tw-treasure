@@ -255,10 +255,10 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   fill: none; stroke: var(--accent); stroke-width: .7; stroke-dasharray: 2 1.6;
   stroke-linejoin: round; opacity: .8; vector-effect: non-scaling-stroke;
 }
-/* 標記沿用 step3 全圖語彙；已完成淡出、自己加的補金框（與清單列的 is-done / is-mine 對應）*/
-.tre-routemap__marker { min-width: 22px; height: 22px; }
+/* 標記沿用 step3 全圖語彙；已完成淡出、自己加的換金邊（與清單列的 is-done / is-mine 對應）。
+   金邊走共用元件的 --pin-edge：標記本體是透明長方形，box-shadow 畫出來會是方框。 */
 .tre-routemap__marker.is-done { opacity: .45; }
-.tre-routemap__marker.is-mine { box-shadow: 0 0 0 2px var(--color-accent-gold, #e6c068); }
+.tre-routemap__marker.is-mine { --pin-edge: var(--color-accent-gold, #e6c068); }
 
 /* 房間卡：四邊至少 16px，首繪先保留內容高度；WS 更新不推走第一張等級卡。 */
 .tre-roombar { padding: var(--space-4); margin-bottom: var(--space-4); min-height: 152px; }
@@ -288,7 +288,6 @@ main.codex-container { padding: 0 var(--space-4) var(--space-8); }
   background-color: var(--color-bg, #080c13);
   background-repeat: no-repeat; background-position: center; background-size: contain;
 }
-.tre-mapview .codex-map-pin { min-width: 22px; height: 22px; }
 .tre-mapview__co {
   margin: var(--space-2) 0 0; text-align: center;
   font-family: var(--font-mono, monospace); color: var(--accent);
