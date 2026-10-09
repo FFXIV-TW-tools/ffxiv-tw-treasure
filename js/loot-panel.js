@@ -12,9 +12,6 @@
   'use strict';
   function t(k, p) { return window.FFXIVI18n.t(k, p); }
 
-  // 查價：marketboard 的 hash 路由（該站 modules/*.js 內部連結用的就是這個形狀）
-  var MARKET = 'https://market.xivtc.com/#/item/';
-
   function create(deps) {
     var el = deps.el;
     var DATA = null, req = null, token = null;
@@ -26,13 +23,31 @@
       return req;
     }
 
-    /* 一顆物品 chip＝查價連結。⚠️ 外連一律 rel="noopener"（新分頁拿得到 window.opener 就能改我們這頁）。 */
+    /**
+     * 市場板物品頁網址；由 portal `header.js` 的 `FFXIVTools.link` 集中提供，render 當下才呼叫。
+     * @param {number} id
+     * @returns {string | null} 共用元件沒載到時為 null（chip 不長連結）
+     */
+    function marketUrl(id) {
+      var tools = /** @type {{ FFXIVTools?: { link?: (slug: string, kind?: string, params?: Record<string, string | number>) => string | null } }} */ (/** @type {unknown} */ (window)).FFXIVTools;
+      return (tools && typeof tools.link === 'function' && tools.link('tw-marketboard', 'item', { id: id })) || null;
+    }
+
+    /* 一顆物品 chip＝查價連結（拿不到網址就是純文字 chip）。⚠️ 外連一律 rel="noopener"（新分頁拿得到 window.opener 就能改我們這頁）。 */
     function itemChip(it, withRate) {
-      var a = document.createElement('a');
+      var url = marketUrl(it.id);
+      /** @type {HTMLAnchorElement | HTMLSpanElement} */
+      var a;
+      if (url) {
+        var link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.setAttribute('data-help', t('在市場板查價：{name}', { name: t(it.name) }));
+        a = link;
+      } else {
+        a = document.createElement('span');
+      }
       a.className = 'codex-chip tre-loot__item';
-      a.href = MARKET + it.id;
-      a.target = '_blank'; a.rel = 'noopener noreferrer';
-      a.setAttribute('data-help', t('在市場板查價：{name}', { name: t(it.name) }));
       var nm = document.createElement('span'); nm.textContent = t(it.name); a.appendChild(nm);
       var accessibleName = nm.textContent;
       // 機率／數量只有寶箱表那半有（`DungeonDrop` 併進來的那些沒有）⇒ 有才顯示，不要補 0%
@@ -43,7 +58,7 @@
         a.appendChild(meta);
         accessibleName += ' · ' + meta.textContent;
       }
-      a.setAttribute('aria-label', t('在市場板查價：{name}（外部網站，另開分頁）', { name: accessibleName }));
+      if (url) a.setAttribute('aria-label', t('在市場板查價：{name}（外部網站，另開分頁）', { name: accessibleName }));
       return a;
     }
 
