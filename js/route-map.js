@@ -50,7 +50,10 @@
       // ⚠️ 整句一條 key，不要拆成「第 」＋數字＋「 點」——那種串接在英日文的語序下組不回通順句子。
       b.setAttribute('aria-label', p.done ? t('第 {n} 點（已完成），放大檢視', { n: p.label })
                                           : t('第 {n} 點，放大檢視', { n: p.label }));
-      if (opts.onPick) b.addEventListener('click', function () { opts.onPick(i); });
+      if (opts.onPick) {
+        b.setAttribute('data-track', 'open-dig-map'); b.setAttribute('data-track-label', '放大挖掘點地圖');
+        b.addEventListener('click', function () { opts.onPick(i); });
+      }
       wrap.appendChild(b);
     });
     return wrap;

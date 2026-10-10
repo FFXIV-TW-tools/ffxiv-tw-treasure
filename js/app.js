@@ -246,6 +246,12 @@
   // ── Step 3：挖掘點（➕ = 加入房間共享路線）──
   function myKey(p) { return (ROOM ? ROOM.owner() : '') + ':' + p.id; }
   function hasMine(p) { return shared.points.some(function (q) { return q.key === myKey(p); }); }
+  /** @param {HTMLElement} card @param {boolean} added @returns {void} */
+  function trackDigCard(card, added) {
+    var inRoom = ROOM && ROOM.isInRoom();
+    card.setAttribute('data-track', inRoom ? (added ? 'remove-route-point' : 'add-route-point') : 'open-dig-map');
+    card.setAttribute('data-track-label', inRoom ? (added ? '移除路線點位' : '新增路線點位') : '放大挖掘點地圖');
+  }
 
   function renderTreasures() {
     var g = state.grade, mid = state.mapId, m = DATA.maps[mid] || {};
@@ -257,6 +263,7 @@
       var off = TC.calcCardOffset({ x: p.x, y: p.y }, sf, DIG_W, DIG_H);
       // button（非 div）→ 鍵盤可 Tab/Enter/Space 操作、螢幕閱讀器可播報（加入共享路線是核心互動）
       var card = document.createElement('button'); card.type = 'button'; card.className = 'tre-dig'; card.dataset.idx = i; card.dataset.key = p.id;
+      trackDigCard(card, hasMine(p));
       card.setAttribute('aria-label', ROOM && ROOM.isInRoom()
         ? t('加入共享路線 X:{x} Y:{y}', { x: p.x, y: p.y })
         : t('放大地圖並複製座標 X:{x} Y:{y}', { x: p.x, y: p.y }));
@@ -315,6 +322,7 @@
     el['dig-grid'].querySelectorAll('.tre-dig').forEach(function (c) {
       var on = shared.points.some(function (q) { return q.key === own + ':' + c.dataset.key; });
       c.classList.toggle('is-added', on);
+      trackDigCard(c, on);
       if (ROOM && ROOM.isInRoom()) c.setAttribute('aria-pressed', on ? 'true' : 'false');
       else c.removeAttribute('aria-pressed');
       c.title = digCardTitle();

@@ -4,8 +4,18 @@
   function t(k, p) { return window.FFXIVI18n.t(k, p); }
   function create(deps) {
     var ROOM = deps.ROOM, bar = deps.el, visual = window.TreasureVisual;
-    function button(label, icon, callback, variant) {
+    /**
+     * @param {string} label
+     * @param {string} icon
+     * @param {() => void} callback
+     * @param {string} variant
+     * @param {string} track
+     * @param {string} trackLabel
+     * @returns {HTMLButtonElement}
+     */
+    function button(label, icon, callback, variant, track, trackLabel) {
       var b = visual.button(label, icon, variant);
+      b.setAttribute('data-track', track); b.setAttribute('data-track-label', trackLabel);
       b.addEventListener('click', callback); return b;
     }
     function copy(value, success) {
@@ -44,6 +54,7 @@
         var code = ROOM.getCode();
         var codeBtn = document.createElement('button'); codeBtn.type = 'button'; codeBtn.className = 'codex-chip tre-roombar__code'; codeBtn.textContent = code;
         codeBtn.setAttribute('aria-label', t('複製房號 {code}', { code: code }));
+        codeBtn.setAttribute('data-track', 'copy-room-code'); codeBtn.setAttribute('data-track-label', '複製房號');
         codeBtn.addEventListener('click', function () { copy(code, t('已複製房號')); }); h.appendChild(codeBtn);
         var online = document.createElement('span'); online.className = 'tre-roombar__online';
         var dot = document.createElement('span'); dot.className = 'codex-status-dot codex-status-dot--' + (ROOM.isConnected() ? 'live' : 'warn'); dot.setAttribute('aria-hidden', 'true');
@@ -60,9 +71,9 @@
       if (ROOM.isInRoom()) {
         toolbar.appendChild(button(t('複製邀請'), 'link', function () {
           copy(t('一起挖寶吧！房號：{code}', { code: ROOM.getCode() }) + '\n' + t('加入連結：{url}', { url: ROOM.inviteUrl() }), t('已複製邀請連結'));
-        }));
+        }, 'ghost', 'copy-invite', '複製邀請'));
         if (ROOM.canSetName()) toolbar.appendChild(nameGroup());
-        toolbar.appendChild(button(t('離開'), 'sign-out', function () { ROOM.leave(); }));
+        toolbar.appendChild(button(t('離開'), 'sign-out', function () { ROOM.leave(); }, 'ghost', 'leave-room', '離開房間'));
         bar.appendChild(toolbar);
         if (ROOM.canSetName()) {
           var hint = document.createElement('p'); hint.id = 'tre-name-hint'; hint.className = 'codex-small tre-roombar__hint'; hint.textContent = t('改名只影響之後加入的點'); bar.appendChild(hint);
@@ -71,7 +82,7 @@
         toolbar.appendChild(button(t('建立房間'), 'plus', function () {
           ROOM.create().then(function (code) { deps.toast(t('房間已建立：{code}（把房號或邀請連結給隊友）', { code: code }), 'ok'); })
             .catch(function () { deps.toast(t('建立失敗（後端未連上）'), 'error'); });
-        }, 'primary'));
+        }, 'primary', 'create-room', '建立房間'));
         var details = document.createElement('details'); details.className = 'codex-accordion tre-roombar__join'; details.open = expanded;
         var summary = document.createElement('summary'); summary.textContent = t('加入房間'); details.appendChild(summary);
         var body = document.createElement('div'); body.className = 'codex-accordion__body';
@@ -80,6 +91,7 @@
         var input = document.createElement('input'); input.id = 'tre-room-code'; input.type = 'text'; input.className = 'codex-input tre-room-input'; input.maxLength = 6;
         input.setAttribute('autocomplete', 'off'); input.setAttribute('aria-describedby', 'tre-room-error'); fields.appendChild(input);
         var join = document.createElement('button'); join.type = 'button'; join.className = 'codex-btn codex-btn--ghost'; join.textContent = t('加入'); fields.appendChild(join);
+        join.setAttribute('data-track', 'join-room'); join.setAttribute('data-track-label', '加入房間');
         var error = document.createElement('span'); error.id = 'tre-room-error'; error.className = 'tre-roombar__error codex-small'; error.textContent = t('請輸入 6 碼房號'); error.hidden = true;
         function update() { input.value = input.value.toUpperCase(); join.setAttribute('aria-disabled', input.value.length !== 6 ? 'true' : 'false'); }
         function doJoin() {
@@ -87,13 +99,23 @@
           error.hidden = true; input.removeAttribute('aria-invalid');
         }
         input.addEventListener('input', function () { update(); if (input.value.length === 6) { error.hidden = true; input.removeAttribute('aria-invalid'); } });
-        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') doJoin(); }); join.addEventListener('click', doJoin);
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') {
+            var usage = /** @type {{ XivUsage?: { track: (name: string) => void } }} */ (window).XivUsage;
+            usage && usage.track('join-room');
+            doJoin();
+          }
+        }); join.addEventListener('click', doJoin);
         body.appendChild(fields); body.appendChild(error);
         var history = ROOM.history();
         if (history.length) {
           var recent = document.createElement('div'); recent.className = 'tre-roombar__history';
           var title = document.createElement('span'); title.textContent = t('最近房號'); recent.appendChild(title);
-          history.forEach(function (code) { var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'codex-chip'; chip.textContent = code; chip.addEventListener('click', function () { ROOM.join(code); }); recent.appendChild(chip); });
+          history.forEach(function (code) {
+            var chip = document.createElement('button'); chip.type = 'button'; chip.className = 'codex-chip'; chip.textContent = code;
+            chip.setAttribute('data-track', 'join-room'); chip.setAttribute('data-track-label', '加入房間');
+            chip.addEventListener('click', function () { ROOM.join(code); }); recent.appendChild(chip);
+          });
           body.appendChild(recent);
         }
         details.appendChild(body); toolbar.appendChild(details); bar.appendChild(toolbar);

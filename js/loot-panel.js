@@ -42,6 +42,7 @@
         var link = document.createElement('a');
         link.href = url;
         link.target = '_blank'; link.rel = 'noopener noreferrer';
+        link.setAttribute('data-track', 'loot-market-link'); link.setAttribute('data-track-label', '查詢掉落物市價');
         link.setAttribute('data-help', t('在市場板查價：{name}', { name: t(it.name) }));
         a = link;
       } else {

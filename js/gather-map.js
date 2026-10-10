@@ -82,6 +82,7 @@
         var list = document.createElement('div'); list.className = 'tre-gather__zones';
         mids.forEach(function (mid) {
           var b = document.createElement('button'); b.type = 'button'; b.className = 'codex-chip';
+          b.setAttribute('data-track', 'open-gather-map'); b.setAttribute('data-track-label', '查看採集點地圖');
           b.appendChild(document.createTextNode(t((d.maps[mid] || {}).zone) + ' '));
           var count = document.createElement('span'); count.className = 'codex-count'; count.textContent = String(byMap[mid].length); b.appendChild(count);
           b.addEventListener('click', function () { openMap(lv, mid, byMap[mid]); });

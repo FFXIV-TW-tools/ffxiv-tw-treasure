@@ -226,10 +226,10 @@
       <div class="tre-panel__head">
         <h2 class="codex-h3 codex-h3--section" data-i18n="共享路線">共享路線</h2>
         <div class="codex-toolbar" role="group" aria-label="共享路線操作" data-i18n-attr="aria-label:共享路線操作">
-          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize"><span data-tre-icon="list-numbers" aria-hidden="true"></span><span data-i18n="建議順序">建議順序</span></button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" data-help="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n-attr="data-help:複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友"><span data-tre-icon="clipboard-text" aria-hidden="true"></span><span data-i18n="複製成巨集">複製成巨集</span></button>
-          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done"><span data-tre-icon="list-checks" aria-hidden="true"></span><span data-i18n="清除已完成">清除已完成</span></button>
-          <button type="button" class="codex-btn codex-btn--danger" data-route="clear"><span data-tre-icon="trash" aria-hidden="true"></span><span data-i18n="清空">清空</span></button>
+          <button type="button" class="codex-btn codex-btn--primary" data-route="optimize" data-track="route-optimize" data-track-label="建議順序"><span data-tre-icon="list-numbers" aria-hidden="true"></span><span data-i18n="建議順序">建議順序</span></button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="copy" data-track="copy-macro" data-track-label="複製成巨集" data-help="複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友" data-i18n-attr="data-help:複製成遊戲巨集：每行 /p 地名 ( 21.0 , 14.0 )，貼進巨集欄即可喊給隊友"><span data-tre-icon="clipboard-text" aria-hidden="true"></span><span data-i18n="複製成巨集">複製成巨集</span></button>
+          <button type="button" class="codex-btn codex-btn--ghost" data-route="clear-done" data-track="clear-done" data-track-label="清除已完成"><span data-tre-icon="list-checks" aria-hidden="true"></span><span data-i18n="清除已完成">清除已完成</span></button>
+          <button type="button" class="codex-btn codex-btn--danger" data-route="clear" data-track="clear-route" data-track-label="清空路線"><span data-tre-icon="trash" aria-hidden="true"></span><span data-i18n="清空">清空</span></button>
         </div>
       </div>
       <div class="codex-kpis codex-kpis--compact tre-route-kpis" id="route-kpis">
@@ -238,7 +238,7 @@
         <div class="codex-kpi"><span class="codex-kpi__icon" data-tre-icon="map-trifold" aria-hidden="true"></span><span class="codex-kpi__label" data-i18n="區域">區域</span><span class="codex-kpi__value" id="route-zones" data-i18n="同步中">同步中</span></div>
       </div>
       <p id="route-stat" class="codex-small" hidden></p>
-      <div id="route-next" class="codex-tint-panel codex-tint-panel--highlight tre-route-next" hidden><span id="route-next-text"></span><span class="codex-toolbar"><button type="button" class="codex-btn codex-btn--ghost" data-route="next-copy" data-i18n="複製座標">複製座標</button><button type="button" class="codex-btn codex-btn--ghost" data-route="next-done" data-i18n="標記完成">標記完成</button></span></div>
+      <div id="route-next" class="codex-tint-panel codex-tint-panel--highlight tre-route-next" hidden><span id="route-next-text"></span><span class="codex-toolbar"><button type="button" class="codex-btn codex-btn--ghost" data-route="next-copy" data-track="copy-coord" data-track-label="複製座標" data-i18n="複製座標">複製座標</button><button type="button" class="codex-btn codex-btn--ghost" data-route="next-done" data-track="mark-done" data-track-label="標記完成" data-i18n="標記完成">標記完成</button></span></div>
       <div id="route-empty" class="codex-empty codex-empty--bare"><p data-i18n="房間裡還沒有挖掘點。先選等級和地圖，再點挖掘點卡片；隊友會即時看見。">房間裡還沒有挖掘點。先選等級和地圖，再點挖掘點卡片；隊友會即時看見。</p><button type="button" class="codex-btn codex-btn--ghost" data-route="go-grade" data-i18n="前往選等級">前往選等級</button></div>
       <div id="route-list" class="tre-route-list"></div>
     </section>

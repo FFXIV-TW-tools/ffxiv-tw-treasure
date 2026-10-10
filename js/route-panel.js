@@ -77,6 +77,7 @@
       var num = document.createElement('span'); num.className = 'tre-route-item__num'; num.textContent = String(i + 1);
       var checkLabel = document.createElement('label'); checkLabel.className = 'codex-checkbox tre-route-item__check';
       var chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = !!r.done; chk.setAttribute('aria-label', t('標記完成'));
+      chk.setAttribute('data-track', 'mark-done'); chk.setAttribute('data-track-label', '標記完成');
       chk.addEventListener('change', function () {
         if (!ensureConnected()) { chk.checked = !chk.checked; return; }
         ROOM.setDone(r.key, chk.checked);
@@ -90,8 +91,10 @@
         button.appendChild(visual.icon(name)); slot.appendChild(button); item.appendChild(slot); return button;
       }
       var cp = iconAction('copy', t('複製此點'));
+      cp.setAttribute('data-track', 'copy-coord'); cp.setAttribute('data-track-label', '複製座標');
       cp.addEventListener('click', function () { copyCoords(maps()[r.map] || { zone: zoneName(r.map) }, r); });
       var rm = iconAction('x', t('移除'));
+      rm.setAttribute('data-track', 'remove-route-point'); rm.setAttribute('data-track-label', '移除路線點位');
       rm.addEventListener('click', function () {
         if (!ensureConnected()) return;
         // 刪自己的點一鍵即可；刪隊友的點才確認（避免默默抹掉別人成果，又不擋正當協作清理）

@@ -110,6 +110,7 @@
     }, function () {});
     if (opts.onCopy) {
       var cp = window.TreasureVisual.button(t('複製座標'), 'copy', 'primary');
+      cp.setAttribute('data-track', 'copy-coord'); cp.setAttribute('data-track-label', '複製座標');
       cp.addEventListener('click', opts.onCopy);
       s.footer.appendChild(cp);
     }
